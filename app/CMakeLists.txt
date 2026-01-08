@@ -22,7 +22,7 @@ add_compile_options(-fsigned-char)
 # Suppress all warnings
 add_definitions(-w)
 add_definitions(-DNDEBUG)
-add_definitions(-DSLIC3R_VERSION=${SLIC3R_VERSION})
+add_definitions(-DSLIC3R_VERSION="${SLIC3R_VERSION}")
 add_definitions(-DSLIC3R_BUILD_ID=${SLIC3R_BUILD_ID})
 
 set(jni_imports ${CMAKE_SOURCE_DIR}/src/main/jniImports)
@@ -40,10 +40,10 @@ elseif (${ANDROID_ABI} STREQUAL "x86")
     set(BOOST_ARCH "x32")
 endif()
 
-set(BOOST_LIBS atomic charconv chrono container context contract coroutine date_time exception fiber
+set(BOOST_LIBS atomic charconv chrono container contract date_time exception
         filesystem graph iostreams json log log_setup math_c99 math_c99f math_c99l math_tr1 math_tr1f
         math_tr1l nowide prg_exec_monitor program_options random regex serialization stacktrace_basic
-        stacktrace_noop system test_exec_moinotr thread timer type_erasure unit_test_framework url wave
+        stacktrace_noop system test_exec_monitor thread timer type_erasure unit_test_framework url wave
         wserialization)
 
 foreach (NAME IN LISTS BOOST_LIBS)
@@ -1320,12 +1320,9 @@ target_link_libraries(slic3r PRIVATE
         boost_charconv
         boost_chrono
         boost_container
-        boost_context
         boost_contract
-        boost_coroutine
         boost_date_time
         boost_exception
-        boost_fiber
         boost_filesystem
         boost_graph
         boost_iostreams

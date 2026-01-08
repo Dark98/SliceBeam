@@ -1,3 +1,43 @@
+def localPropsFile = file("local.properties")
+if (!localPropsFile.exists()) {
+    def sdkRoot = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+    if (!sdkRoot) {
+        def localAppData = System.getenv("LOCALAPPDATA")
+        if (localAppData) {
+            def defaultSdk = new File(localAppData, "Android\\Sdk")
+            if (defaultSdk.exists()) {
+                sdkRoot = defaultSdk.absolutePath
+            }
+        }
+    }
+    if (sdkRoot) {
+        localPropsFile.text = "sdk.dir=${sdkRoot.replace('\\', '\\\\')}\n"
+    }
+}
+
+def hasSubmodules = file(".gitmodules").exists()
+def submoduleRoots = [
+        file("EventBus/eventbus"),
+        file("EventBus/eventbus_api"),
+        file("EventBus/eventbus_processor"),
+        file("SAPIL/sapil")
+]
+def missingSubmodule = submoduleRoots.any { !it.exists() }
+if (hasSubmodules && missingSubmodule) {
+    try {
+        def proc = new ProcessBuilder("git", "submodule", "update", "--init", "--recursive")
+                .directory(rootDir)
+                .redirectErrorStream(true)
+                .start()
+        proc.inputStream.eachLine { println(it) }
+        if (proc.waitFor() != 0) {
+            println("Warning: git submodule update failed; run it manually if build fails.")
+        }
+    } catch (Exception e) {
+        println("Warning: unable to run git submodule update; run it manually if build fails.")
+    }
+}
+
 rootProject.name = "Slice Beam"
 include ':app', ':eventbus', ':eventbus_api', ':eventbus_processor', ':sapil'
 

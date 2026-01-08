@@ -1,6 +1,7 @@
 #include <android/log.h>
 
 #include <jni.h>
+#include <thread>
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/Config.hpp"
 #include "libslic3r/Model.hpp"

@@ -1563,13 +1563,13 @@ void GCodeGenerator::process_layers(
         [&output_stream](std::string s) { output_stream.write(s); }
     );
 
-    tbb::filter<void, LayerResult> pipeline_to_layerresult = smooth_path_interpolator & generator;
+    auto pipeline_to_layerresult = smooth_path_interpolator & generator;
     if (m_spiral_vase)
         pipeline_to_layerresult = pipeline_to_layerresult & spiral_vase;
     if (m_pressure_equalizer)
         pipeline_to_layerresult = pipeline_to_layerresult & pressure_equalizer;
 
-    tbb::filter<LayerResult, std::string> pipeline_to_string = cooling;
+    auto pipeline_to_string = cooling;
     if (m_find_replace)
         pipeline_to_string = pipeline_to_string & find_replace;
 
@@ -1656,13 +1656,13 @@ void GCodeGenerator::process_layers(
         [&output_stream](std::string s) { output_stream.write(s); }
     );
 
-    tbb::filter<void, LayerResult> pipeline_to_layerresult = smooth_path_interpolator & generator;
+    auto pipeline_to_layerresult = smooth_path_interpolator & generator;
     if (m_spiral_vase)
         pipeline_to_layerresult = pipeline_to_layerresult & spiral_vase;
     if (m_pressure_equalizer)
         pipeline_to_layerresult = pipeline_to_layerresult & pressure_equalizer;
 
-    tbb::filter<LayerResult, std::string> pipeline_to_string = cooling;
+    auto pipeline_to_string = cooling;
     if (m_find_replace)
         pipeline_to_string = pipeline_to_string & find_replace;
 
