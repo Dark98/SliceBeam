@@ -101,13 +101,26 @@ public class SliceBeam extends Application {
 
     public static ConfigObject buildCurrentConfigObject() {
         ConfigObject singleObject = new ConfigObject();
-        singleObject.values.putAll(SliceBeam.CONFIG.findPrinter(SliceBeam.CONFIG.presets.get("printer")).values);
-        if (SliceBeam.CONFIG.findPrint(SliceBeam.CONFIG.presets.get("print")) != null) {
-            singleObject.values.putAll(SliceBeam.CONFIG.findPrint(SliceBeam.CONFIG.presets.get("print")).values);
+        ConfigObject printerConfig = SliceBeam.CONFIG.findPrinter(SliceBeam.CONFIG.presets.get("printer"));
+        if (printerConfig != null) {
+            singleObject.values.putAll(printerConfig.values);
+        }
+        ConfigObject printConfig = SliceBeam.CONFIG.findPrint(SliceBeam.CONFIG.presets.get("print"));
+        if (printConfig != null) {
+            for (Map.Entry<String, String> en : printConfig.values.entrySet()) {
+                if (!Slic3rConfigWrapper.PRINTER_CONFIG_KEYS.contains(en.getKey())) {
+                    singleObject.values.put(en.getKey(), en.getValue());
+                }
+            }
         }
         // TODO: MMU. Detect by printerConfig#getExtruderCount()
-        if (SliceBeam.CONFIG.findFilament(SliceBeam.CONFIG.presets.get("filament")) != null) {
-            singleObject.values.putAll(SliceBeam.CONFIG.findFilament(SliceBeam.CONFIG.presets.get("filament")).values);
+        ConfigObject filamentConfig = SliceBeam.CONFIG.findFilament(SliceBeam.CONFIG.presets.get("filament"));
+        if (filamentConfig != null) {
+            for (Map.Entry<String, String> en : filamentConfig.values.entrySet()) {
+                if (!Slic3rConfigWrapper.PRINTER_CONFIG_KEYS.contains(en.getKey())) {
+                    singleObject.values.put(en.getKey(), en.getValue());
+                }
+            }
         }
 
         PrintConfigDef def = PrintConfigDef.getInstance();
@@ -121,12 +134,10 @@ public class SliceBeam extends Application {
 
     public static void genCurrentConfig() throws IOException {
         File cfg = getCurrentConfigFile();
-        if (!cfg.exists()) {
-            FileOutputStream fos = new FileOutputStream(cfg);
-            ConfigObject singleObject = buildCurrentConfigObject();
-            fos.write(singleObject.serialize().getBytes(StandardCharsets.UTF_8));
-            fos.close();
-        }
+        FileOutputStream fos = new FileOutputStream(cfg);
+        ConfigObject singleObject = buildCurrentConfigObject();
+        fos.write(singleObject.serialize().getBytes(StandardCharsets.UTF_8));
+        fos.close();
     }
 
     public static File getCurrentConfigFile() {
