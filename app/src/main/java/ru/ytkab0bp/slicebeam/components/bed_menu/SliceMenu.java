@@ -56,6 +56,7 @@ import ru.ytkab0bp.slicebeam.config.ConfigObject;
 import ru.ytkab0bp.slicebeam.events.NeedDismissSnackbarEvent;
 import ru.ytkab0bp.slicebeam.events.NeedSnackbarEvent;
 import ru.ytkab0bp.slicebeam.fragment.BedFragment;
+import ru.ytkab0bp.slicebeam.print_host.ElegooLinkClient;
 import ru.ytkab0bp.slicebeam.recycler.SimpleRecyclerItem;
 import ru.ytkab0bp.slicebeam.slic3r.GCodeProcessorResult;
 import ru.ytkab0bp.slicebeam.slic3r.GCodeViewer;
@@ -76,7 +77,7 @@ public class SliceMenu extends ListBedMenu {
         client.setMaxRetriesAndTimeout(0, 10000);
     }
 
-    private final static List<String> SUPPORTED_SEND = Collections.singletonList("octoprint");
+    private final static List<String> SUPPORTED_SEND = Arrays.asList("octoprint", "elegoolink");
     private int lastUid;
 
     @Override
@@ -121,13 +122,14 @@ public class SliceMenu extends ListBedMenu {
         String apiKey = obj.get("printhost_apikey");
         if (SUPPORTED_SEND.contains(type) && !TextUtils.isEmpty(host)) {
             String finalType = type;
-            items.add(new BedMenuItem(R.string.MenuSliceSendToPrinter, R.drawable.send_outline_28).onClick(v -> upload(finalType, host, apiKey, false)));
-            items.add(new BedMenuItem(R.string.MenuSliceSendToPrinterAndPrint, R.drawable.send_28).onClick(v -> upload(finalType, host, apiKey, true)));
+            ConfigObject finalObj = obj;
+            items.add(new BedMenuItem(R.string.MenuSliceSendToPrinter, R.drawable.send_outline_28).onClick(v -> upload(finalType, host, apiKey, false, finalObj)));
+            items.add(new BedMenuItem(R.string.MenuSliceSendToPrinterAndPrint, R.drawable.send_28).onClick(v -> upload(finalType, host, apiKey, true, finalObj)));
         }
         return items;
     }
 
-    private void upload(String type, String host, String apiKey, boolean print) {
+    private void upload(String type, String host, String apiKey, boolean print, ConfigObject config) {
         String name = fragment.getGlView().getRenderer().getGcodeResult().getRecommendedName();
         switch (type) {
             default:
@@ -172,7 +174,41 @@ public class SliceMenu extends ListBedMenu {
                                 .show());
                     }
                 });
+                    break;
+            case "elegoolink": {
+                if (!host.startsWith("http://") && !host.startsWith("https://")) {
+                    host = "http://" + host;
+                }
+                String elegooTag = UUID.randomUUID().toString();
+                SliceBeam.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.LOADING, R.string.MenuSliceSendToPrinterLoading).tag(elegooTag));
+                String finalHost = host;
+                final boolean timelapse = config != null && "1".equals(config.get("elegoolink_timelapse"));
+                final boolean bedLeveling = config != null && "1".equals(config.get("elegoolink_bed_leveling"));
+                int bedTypeVal = 0;
+                if (config != null) {
+                    String bedTypeValue = config.get("elegoolink_bed_type");
+                    if ("1".equals(bedTypeValue) || "pc".equalsIgnoreCase(bedTypeValue)) {
+                        bedTypeVal = 1;
+                    }
+                }
+                final int bedType = bedTypeVal;
+                new Thread(() -> {
+                    ElegooLinkClient.Result result = ElegooLinkClient.upload(BedFragment.getTempGCodePath(), finalHost, name, print, timelapse, bedLeveling, bedType);
+                    ViewUtils.postOnMainThread(() -> {
+                        SliceBeam.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(elegooTag));
+                        if (result.ok) {
+                            SliceBeam.EVENT_BUS.fireEvent(new NeedSnackbarEvent(print ? SnackbarsLayout.Type.INFO : SnackbarsLayout.Type.DONE, print ? R.string.MenuSliceSendToPrinterPrintStarted : R.string.MenuSliceSendToPrinterOK));
+                        } else {
+                            new BeamAlertDialogBuilder(fragment.getContext())
+                                    .setTitle(R.string.MenuSliceSendToPrinterFailed)
+                                    .setMessage(result.error)
+                                    .setPositiveButton(android.R.string.ok, null)
+                                    .show();
+                        }
+                    });
+                }).start();
                 break;
+            }
         }
     }
 

@@ -519,6 +519,7 @@ public abstract class ProfileListFragment extends Fragment {
 
     @SuppressLint("NotifyDataSetChanged")
     protected void setConfigItems(List<OptionElement> items) {
+        categoryElements.clear();
         List<OptionWrapper> list = new ArrayList<>();
         int j = 0;
         for (int i = 0; i < items.size(); i++) {
@@ -539,7 +540,21 @@ public abstract class ProfileListFragment extends Fragment {
                 categoryElements.get(j - 1).add(w);
             }
         }
-        currentList = list;
+        List<OptionWrapper> expanded = new ArrayList<>();
+        int categoryIndex = 0;
+        for (OptionWrapper w : list) {
+            expanded.add(w);
+            if (w.categoryIndex == categoryIndex && unfolded.get(categoryIndex)) {
+                List<OptionWrapper> extra = categoryElements.get(categoryIndex);
+                if (extra != null) {
+                    expanded.addAll(extra);
+                }
+            }
+            if (w.categoryIndex == categoryIndex) {
+                categoryIndex++;
+            }
+        }
+        currentList = expanded;
         recyclerView.getAdapter().notifyDataSetChanged();
     }
 
@@ -676,8 +691,8 @@ public abstract class ProfileListFragment extends Fragment {
                         String[] labels;
                         String[] values;
                         if (Objects.equals("host_type", def.key)) {
-                            labels = new String[]{"OctoPrint"};
-                            values = new String[]{"octoprint"};
+                            labels = new String[]{"OctoPrint", "ElegooLink"};
+                            values = new String[]{"octoprint", "elegoolink"};
                         } else {
                             labels = new String[def.enumLabels.length];
                             values = def.enumValues;

@@ -1622,6 +1622,9 @@ std::string Print::output_filename(const std::string &filename_base) const
     DynamicConfig config = this->finished() ? this->print_statistics().config() : this->print_statistics().placeholders();
     config.set_key_value("num_extruders", new ConfigOptionInt((int)m_config.nozzle_diameter.size()));
     config.set_key_value("default_output_extension", new ConfigOptionString(".gcode"));
+    config.set_key_value("nozzle_diameter", new ConfigOptionFloats(m_config.nozzle_diameter.values));
+    config.set_key_value("filament_type", new ConfigOptionStrings(m_config.filament_type.values));
+    config.set_key_value("layer_height", new ConfigOptionFloat(m_default_object_config.layer_height.value));
 
     // Handle output_filename_format. There is a hack related to binary G-codes: gcode / bgcode substitution.
     std::string output_filename_format = m_config.output_filename_format.value;

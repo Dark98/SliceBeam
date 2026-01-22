@@ -9,6 +9,7 @@ import ru.ytkab0bp.slicebeam.SliceBeam;
 import ru.ytkab0bp.slicebeam.config.ConfigObject;
 import ru.ytkab0bp.slicebeam.recycler.SpaceItem;
 import ru.ytkab0bp.slicebeam.slic3r.PrintConfigDef;
+import ru.ytkab0bp.slicebeam.slic3r.ConfigOptionDef;
 import ru.ytkab0bp.slicebeam.slic3r.Slic3rLocalization;
 import ru.ytkab0bp.slicebeam.utils.ViewUtils;
 
@@ -175,6 +176,22 @@ public class PrinterConfigFragment extends ProfileListFragment {
                 new OptionElement(def.options.get("printhost_apikey"))
         ));
 
+        String hostType = null;
+        if (diffObject != null && diffObject.has("host_type")) {
+            hostType = diffObject.get("host_type");
+        }
+        if (hostType == null) {
+            hostType = currentConfig.get("host_type");
+        }
+        if ("elegoolink".equalsIgnoreCase(hostType)) {
+            list.addAll(Arrays.asList(
+                    new OptionElement(new SubHeader("ElegooLink")),
+                    new OptionElement(def.options.get("elegoolink_timelapse")),
+                    new OptionElement(def.options.get("elegoolink_bed_leveling")),
+                    new OptionElement(def.options.get("elegoolink_bed_type"))
+            ));
+        }
+
         return list;
     }
 
@@ -236,5 +253,19 @@ public class PrinterConfigFragment extends ProfileListFragment {
 
         // TODO: Reset print/filament profiles, maybe physical profiles?
         SliceBeam.saveConfig();
+    }
+
+    @Override
+    protected void updateConfigField(ConfigOptionDef def, int i, String value) {
+        super.updateConfigField(def, i, value);
+        if ("host_type".equals(def.key)) {
+            onUpdateConfigItems();
+        }
+    }
+
+    @Override
+    protected void onUpdateConfigItems() {
+        setConfigItems(getConfigItems());
+        super.onUpdateConfigItems();
     }
 }

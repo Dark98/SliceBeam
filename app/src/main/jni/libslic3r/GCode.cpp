@@ -1174,6 +1174,29 @@ void GCodeGenerator::_do_export(Print& print, GCodeOutputStream &file, Thumbnail
     this->placeholder_parser().set("has_single_extruder_multi_material_priming", has_wipe_tower && print.config().single_extruder_multi_material_priming);
     this->placeholder_parser().set("total_toolchanges", tool_ordering.toolchanges_count());
     {
+        const char *bed_type_label = (print.config().elegoolink_bed_type.value == ElegooBedType::PTE) ? "Side A" : "Side B";
+        this->placeholder_parser().set("curr_bed_type", new ConfigOptionString(bed_type_label));
+    }
+    {
+        this->placeholder_parser().set("printable_height", new ConfigOptionFloat(print.config().max_print_height.value));
+        this->placeholder_parser().set("nozzle_temperature_initial_layer", new ConfigOptionInt(print.config().first_layer_temperature.get_at(initial_extruder_id)));
+        this->placeholder_parser().set("bed_temperature_initial_layer_single", new ConfigOptionInt(print.config().first_layer_bed_temperature.get_at(initial_extruder_id)));
+        this->placeholder_parser().set("initial_no_support_extruder", new ConfigOptionInt(int(initial_extruder_id)));
+        this->placeholder_parser().set("outer_wall_acceleration", new ConfigOptionFloat(print.config().external_perimeter_acceleration.value));
+
+        if (const ConfigOption *opt = print.config().optptr("enable_pressure_advance"); opt != nullptr) {
+            this->placeholder_parser().set("enable_pressure_advance", opt->clone());
+        } else {
+            this->placeholder_parser().set("enable_pressure_advance", new ConfigOptionBools(std::max<size_t>(1, print.config().nozzle_diameter.values.size()), false));
+        }
+
+        if (const ConfigOption *opt = print.config().optptr("pressure_advance"); opt != nullptr) {
+            this->placeholder_parser().set("pressure_advance", opt->clone());
+        } else {
+            this->placeholder_parser().set("pressure_advance", new ConfigOptionFloat(0.0));
+        }
+    }
+    {
         BoundingBoxf bbox(print.config().bed_shape.values);
         assert(bbox.defined);
         if (! bbox.defined)

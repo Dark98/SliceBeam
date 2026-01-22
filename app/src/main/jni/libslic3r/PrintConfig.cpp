@@ -104,6 +104,7 @@ static const t_config_enum_values s_keys_map_PrintHostType {
     { "repetier",       htRepetier },
     { "mks",            htMKS },
     { "prusaconnectnew", htPrusaConnectNew },
+    { "elegoolink",     htElegooLink },
 
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(PrintHostType)
@@ -243,6 +244,12 @@ static const t_config_enum_values s_keys_map_GCodeThumbnailsFormat = {
     { "QOI", int(GCodeThumbnailsFormat::QOI) }
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(GCodeThumbnailsFormat)
+
+static const t_config_enum_values s_keys_map_ElegooBedType = {
+    { "pte", int(ElegooBedType::PTE) },
+    { "pc", int(ElegooBedType::PC) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(ElegooBedType)
 
 static const t_config_enum_values s_keys_map_ForwardCompatibilitySubstitutionRule = {
     { "disable",        ForwardCompatibilitySubstitutionRule::Disable },
@@ -2223,11 +2230,37 @@ void PrintConfigDef::init_fff_params()
         { "flashair",       "FlashAir" },
         { "astrobox",       "AstroBox" },
         { "repetier",       "Repetier" },
-        { "mks",            "MKS" }
+        { "mks",            "MKS" },
+        { "elegoolink",     "ElegooLink" }
     });
     def->mode = comAdvanced;
     def->cli = ConfigOptionDef::nocli;
     def->set_default_value(new ConfigOptionEnum<PrintHostType>(htPrusaLink));
+
+    def = this->add("elegoolink_timelapse", coBool);
+    def->label = L("ElegooLink timelapse");
+    def->tooltip = L("Enable timelapse recording when starting a print via ElegooLink.");
+    def->mode = comAdvanced;
+    def->cli = ConfigOptionDef::nocli;
+    def->set_default_value(new ConfigOptionBool(false));
+
+    def = this->add("elegoolink_bed_leveling", coBool);
+    def->label = L("ElegooLink bed leveling");
+    def->tooltip = L("Enable heated bed leveling when starting a print via ElegooLink.");
+    def->mode = comAdvanced;
+    def->cli = ConfigOptionDef::nocli;
+    def->set_default_value(new ConfigOptionBool(false));
+
+    def = this->add("elegoolink_bed_type", coEnum);
+    def->label = L("ElegooLink bed type");
+    def->tooltip = L("Select bed type for ElegooLink printing.");
+    def->set_enum<ElegooBedType>({
+        { "pte", L("Side A") },
+        { "pc",  L("Side B") }
+    });
+    def->mode = comAdvanced;
+    def->cli = ConfigOptionDef::nocli;
+    def->set_default_value(new ConfigOptionEnum<ElegooBedType>(ElegooBedType::PTE));
 
     def = this->add("only_retract_when_crossing_perimeters", coBool);
     def->label = L("Only retract when crossing perimeters");

@@ -525,7 +525,8 @@ static std::vector<std::string> s_Preset_printer_options {
     "cooling_tube_length", "high_current_on_filament_swap", "parking_pos_retraction", "extra_loading_move", "multimaterial_purging",
     "max_print_height", "default_print_profile", "inherits",
     "remaining_times", "silent_mode",
-    "machine_limits_usage", "thumbnails", "thumbnails_format"
+    "machine_limits_usage", "thumbnails", "thumbnails_format",
+    "elegoolink_timelapse", "elegoolink_bed_leveling", "elegoolink_bed_type"
 };
 
 static std::vector<std::string> s_Preset_sla_print_options {
@@ -1702,7 +1703,10 @@ static std::vector<std::string> s_PhysicalPrinter_opts {
     // HTTP digest authentization (RFC 2617)
     "printhost_user",
     "printhost_password",
-    "printhost_ssl_ignore_revoke"
+    "printhost_ssl_ignore_revoke",
+    "elegoolink_timelapse",
+    "elegoolink_bed_leveling",
+    "elegoolink_bed_type"
 };
 
 const std::vector<std::string>& PhysicalPrinter::printer_options()

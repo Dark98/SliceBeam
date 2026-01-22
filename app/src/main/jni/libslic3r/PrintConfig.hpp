@@ -65,7 +65,7 @@ enum class MachineLimitsUsage {
 };
 
 enum PrintHostType {
-   htPrusaLink, htPrusaConnect, htOctoPrint, htMoonraker, htDuet, htFlashAir, htAstroBox, htRepetier, htMKS, htPrusaConnectNew
+   htPrusaLink, htPrusaConnect, htOctoPrint, htMoonraker, htDuet, htFlashAir, htAstroBox, htRepetier, htMKS, htPrusaConnectNew, htElegooLink
 };
 
 enum AuthorizationType {
@@ -76,6 +76,11 @@ enum class FuzzySkinType {
     None,
     External,
     All,
+};
+
+enum class ElegooBedType {
+    PTE = 0,
+    PC = 1
 };
 
 enum InfillPattern : int {
@@ -212,6 +217,7 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(GCodeFlavor)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(MachineLimitsUsage)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(PrintHostType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(AuthorizationType)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(ElegooBedType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(FuzzySkinType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(InfillPattern)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(IroningType)
@@ -883,6 +889,7 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionFloatOrPercent,     first_layer_height))
     ((ConfigOptionFloatOrPercent,     first_layer_speed))
     ((ConfigOptionInts,               first_layer_temperature))
+    ((ConfigOptionEnum<ElegooBedType>, elegoolink_bed_type))
     ((ConfigOptionIntsNullable,       idle_temperature))
     ((ConfigOptionInts,               full_fan_speed_layer))
     ((ConfigOptionFloat,              infill_acceleration))
