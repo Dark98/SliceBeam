@@ -90,7 +90,7 @@ public class Slic3rConfigWrapper {
             "cooling_tube_length", "high_current_on_filament_swap", "parking_pos_retraction", "extra_loading_move", "multimaterial_purging",
             "max_print_height", "default_print_profile", "inherits",
             "remaining_times", "silent_mode",
-            "machine_limits_usage", "thumbnails", "thumbnails_format",
+            "machine_limits_usage", "thumbnails",
             "machine_max_acceleration_extruding", "machine_max_acceleration_retracting", "machine_max_acceleration_travel",
             "machine_max_acceleration_x", "machine_max_acceleration_y", "machine_max_acceleration_z", "machine_max_acceleration_e",
             "machine_max_feedrate_x", "machine_max_feedrate_y", "machine_max_feedrate_z", "machine_max_feedrate_e",

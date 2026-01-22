@@ -51,6 +51,7 @@ import ru.ytkab0bp.slicebeam.events.SlicingProgressEvent;
 import ru.ytkab0bp.slicebeam.navigation.Fragment;
 import ru.ytkab0bp.slicebeam.slic3r.Bed3D;
 import ru.ytkab0bp.slicebeam.slic3r.GCodeProcessorResult;
+import ru.ytkab0bp.slicebeam.slic3r.GCodeThumbnailer;
 import ru.ytkab0bp.slicebeam.slic3r.Model;
 import ru.ytkab0bp.slicebeam.slic3r.Slic3rRuntimeError;
 import ru.ytkab0bp.slicebeam.theme.ThemesRepo;
@@ -412,12 +413,14 @@ public class BedFragment extends Fragment {
                                 });
                             }
 
-                            if (!DEBUG_VIEWER) {
-                                gCodeResult = glView.getRenderer().getModel().slice(cfg.getAbsolutePath(), gcode.getAbsolutePath(), (progress, text) -> SliceBeam.EVENT_BUS.fireEvent(new SlicingProgressEvent(progress, text)));
-                                SliceBeam.EVENT_BUS.fireEvent(new SlicingProgressEvent(100, ""));
-                            } else {
-                                gCodeResult = new GCodeProcessorResult(gcode);
-                            }
+                              if (!DEBUG_VIEWER) {
+                                  gCodeResult = glView.getRenderer().getModel().slice(cfg.getAbsolutePath(), gcode.getAbsolutePath(), (progress, text) -> SliceBeam.EVENT_BUS.fireEvent(new SlicingProgressEvent(progress, text)));
+                                  GCodeThumbnailer.addThumbnailsToGcode(gcode, SliceBeam.buildCurrentConfigObject(), glView);
+                                  SliceBeam.EVENT_BUS.fireEvent(new SlicingProgressEvent(100, ""));
+                              } else {
+                                  gCodeResult = new GCodeProcessorResult(gcode);
+                                  GCodeThumbnailer.addThumbnailsToGcode(gcode, SliceBeam.buildCurrentConfigObject(), glView);
+                              }
                             ViewUtils.postOnMainThread(()-> {
                                 glView.queueEvent(()->{
                                     glView.getRenderer().setGCodeViewer(gCodeResult);

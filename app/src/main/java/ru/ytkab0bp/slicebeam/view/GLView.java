@@ -25,6 +25,10 @@ import android.view.ViewConfiguration;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 
+import javax.microedition.khronos.egl.EGL10;
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.egl.EGLDisplay;
+
 import ru.ytkab0bp.slicebeam.R;
 import ru.ytkab0bp.slicebeam.SliceBeam;
 import ru.ytkab0bp.slicebeam.events.LongClickTranslationEvent;
@@ -85,6 +89,7 @@ public class GLView extends GLSurfaceView implements IThemeView {
         xferPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
 
         setEGLContextClientVersion(3);
+        setEGLConfigChooser(new MultisampleConfigChooser());
         renderer = new GLRenderer(this);
 
         setRenderer(renderer);
@@ -240,6 +245,89 @@ public class GLView extends GLSurfaceView implements IThemeView {
             throw new RuntimeException(e);
         }
         return Bitmap.createBitmap(bitmapSource, w, h, Bitmap.Config.ARGB_8888);
+    }
+
+    public Bitmap snapshotBitmap(boolean hideBed) {
+        if (!hideBed) {
+            return snapshotBitmap();
+        }
+
+        boolean prev = renderer.isBedVisible();
+        renderer.setBedVisible(false);
+        renderer.onDrawFrame(null);
+        Bitmap snapshot = snapshotBitmap();
+        renderer.setBedVisible(prev);
+        return snapshot;
+    }
+
+    public Bitmap snapshotBitmap(boolean hideBed, int scaleFactor) {
+        if (scaleFactor <= 1) {
+            return snapshotBitmap(hideBed);
+        }
+        int w = getWidth();
+        int h = getHeight();
+        if (w <= 0 || h <= 0) {
+            return null;
+        }
+        return renderer.renderToBitmap(w * scaleFactor, h * scaleFactor, hideBed, false);
+    }
+
+    public Bitmap snapshotBitmap(int width, int height, boolean hideBed) {
+        return renderer.renderToBitmap(width, height, hideBed, false);
+    }
+
+    public Bitmap snapshotBitmap(int width, int height, boolean hideBed, boolean topView) {
+        return renderer.renderToBitmap(width, height, hideBed, topView);
+    }
+
+    private static final class MultisampleConfigChooser implements EGLConfigChooser {
+        private static final int EGL_OPENGL_ES2_BIT = 4;
+
+        @Override
+        public EGLConfig chooseConfig(EGL10 egl, EGLDisplay display) {
+            int[] configSpec = {
+                    EGL10.EGL_RED_SIZE, 8,
+                    EGL10.EGL_GREEN_SIZE, 8,
+                    EGL10.EGL_BLUE_SIZE, 8,
+                    EGL10.EGL_ALPHA_SIZE, 8,
+                    EGL10.EGL_DEPTH_SIZE, 16,
+                    EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                    EGL10.EGL_SAMPLE_BUFFERS, 1,
+                    EGL10.EGL_SAMPLES, 4,
+                    EGL10.EGL_NONE
+            };
+            EGLConfig config = chooseConfig(egl, display, configSpec);
+            if (config != null) {
+                return config;
+            }
+
+            int[] fallbackSpec = {
+                    EGL10.EGL_RED_SIZE, 8,
+                    EGL10.EGL_GREEN_SIZE, 8,
+                    EGL10.EGL_BLUE_SIZE, 8,
+                    EGL10.EGL_ALPHA_SIZE, 8,
+                    EGL10.EGL_DEPTH_SIZE, 16,
+                    EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                    EGL10.EGL_NONE
+            };
+            return chooseConfig(egl, display, fallbackSpec);
+        }
+
+        private EGLConfig chooseConfig(EGL10 egl, EGLDisplay display, int[] configSpec) {
+            int[] numConfigs = new int[1];
+            if (!egl.eglChooseConfig(display, configSpec, null, 0, numConfigs)) {
+                return null;
+            }
+            int count = numConfigs[0];
+            if (count <= 0) {
+                return null;
+            }
+            EGLConfig[] configs = new EGLConfig[count];
+            if (!egl.eglChooseConfig(display, configSpec, configs, count, numConfigs)) {
+                return null;
+            }
+            return configs[0];
+        }
     }
 
     @Override

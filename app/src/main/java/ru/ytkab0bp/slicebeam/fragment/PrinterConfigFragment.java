@@ -45,8 +45,7 @@ public class PrinterConfigFragment extends ProfileListFragment {
 
                 new OptionElement(new SubHeader("Firmware")),
                 new OptionElement(def.options.get("gcode_flavor")),
-                // TODO: Thumbnails are not working *yet*
-//                new OptionElement(def.options.get("thumbnails")),
+                new OptionElement(def.options.get("thumbnails")),
                 new OptionElement(def.options.get("silent_mode")),
                 new OptionElement(def.options.get("remaining_times")),
                 new OptionElement(def.options.get("binary_gcode")),

@@ -3,6 +3,7 @@ package ru.ytkab0bp.slicebeam.render;
 import static android.opengl.GLES30.*;
 import static ru.ytkab0bp.slicebeam.utils.DebugUtils.assertTrue;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.opengl.GLSurfaceView;
 import android.util.Log;
@@ -11,6 +12,8 @@ import androidx.core.graphics.ColorUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import java.nio.IntBuffer;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -51,6 +54,7 @@ public class GLRenderer implements GLSurfaceView.Renderer {
 
     // Instance values, should be released
     private Bed3D bed;
+    private boolean bedVisible = true;
     private int lastConfigUid;
     private GLShadersManager shadersManager;
     private GLModel backgroundModel;
@@ -77,6 +81,7 @@ public class GLRenderer implements GLSurfaceView.Renderer {
     private Vec3d bbMin = new Vec3d(), bbMax = new Vec3d();
     private boolean isInFlattenMode;
     private ArrayList<GLModel> flattenPlanes = new ArrayList<>();
+    private static final double TOP_VIEW_MARGIN = 1.1;
 
     public Camera getCamera() {
         return camera;
@@ -84,6 +89,204 @@ public class GLRenderer implements GLSurfaceView.Renderer {
 
     public Bed3D getBed() {
         return bed;
+    }
+
+    public void setBedVisible(boolean visible) {
+        bedVisible = visible;
+    }
+
+    public boolean isBedVisible() {
+        return bedVisible;
+    }
+
+    public Bitmap renderToBitmap(int width, int height, boolean hideBed) {
+        return renderToBitmap(width, height, hideBed, false);
+    }
+
+    public Bitmap renderToBitmap(int width, int height, boolean hideBed, boolean topView) {
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+
+        int[] fbo = new int[1];
+        int[] texture = new int[1];
+        int[] depth = new int[1];
+        int[] fboMsaa = new int[1];
+        int[] colorMsaa = new int[1];
+        int[] depthMsaa = new int[1];
+
+        glGenFramebuffers(1, fbo, 0);
+        glGenTextures(1, texture, 0);
+        glGenRenderbuffers(1, depth, 0);
+
+        glBindTexture(GL_TEXTURE_2D, texture[0]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, null);
+
+        glBindRenderbuffer(GL_RENDERBUFFER, depth[0]);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo[0]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture[0], 0);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth[0]);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glDeleteRenderbuffers(1, depth, 0);
+            glDeleteTextures(1, texture, 0);
+            glDeleteFramebuffers(1, fbo, 0);
+            return null;
+        }
+
+        boolean useMsaa = true;
+        if (useMsaa) {
+            glGenFramebuffers(1, fboMsaa, 0);
+            glGenRenderbuffers(1, colorMsaa, 0);
+            glGenRenderbuffers(1, depthMsaa, 0);
+
+            glBindRenderbuffer(GL_RENDERBUFFER, colorMsaa[0]);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGBA8, width, height);
+
+            glBindRenderbuffer(GL_RENDERBUFFER, depthMsaa[0]);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH_COMPONENT16, width, height);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, fboMsaa[0]);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorMsaa[0]);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthMsaa[0]);
+
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                useMsaa = false;
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glDeleteRenderbuffers(1, depthMsaa, 0);
+                glDeleteRenderbuffers(1, colorMsaa, 0);
+                glDeleteFramebuffers(1, fboMsaa, 0);
+            }
+        }
+
+        int prevWidth = viewportWidth;
+        int prevHeight = viewportHeight;
+        boolean prevBed = bedVisible;
+        CameraState prevCamera = null;
+
+        viewportWidth = width;
+        viewportHeight = height;
+        if (useMsaa) {
+            glBindFramebuffer(GL_FRAMEBUFFER, fboMsaa[0]);
+        } else {
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo[0]);
+        }
+        glViewport(0, 0, width, height);
+        bedVisible = !hideBed;
+        if (topView) {
+            prevCamera = applyTopViewCamera();
+        }
+        updateProjection();
+
+        onDrawFrame(null);
+
+        if (useMsaa) {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, fboMsaa[0]);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo[0]);
+            glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo[0]);
+        }
+
+        Bitmap bitmap = readPixelsToBitmap(width, height);
+
+        if (prevCamera != null) {
+            restoreCamera(prevCamera);
+        }
+        bedVisible = prevBed;
+        viewportWidth = prevWidth;
+        viewportHeight = prevHeight;
+        glViewport(0, 0, prevWidth, prevHeight);
+        updateProjection();
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        if (useMsaa) {
+            glDeleteRenderbuffers(1, depthMsaa, 0);
+            glDeleteRenderbuffers(1, colorMsaa, 0);
+            glDeleteFramebuffers(1, fboMsaa, 0);
+        }
+        glDeleteRenderbuffers(1, depth, 0);
+        glDeleteTextures(1, texture, 0);
+        glDeleteFramebuffers(1, fbo, 0);
+
+        return bitmap;
+    }
+
+    private static Bitmap readPixelsToBitmap(int width, int height) {
+        int[] buffer = new int[width * height];
+        int[] source = new int[width * height];
+        IntBuffer intBuffer = IntBuffer.wrap(buffer);
+        intBuffer.position(0);
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, intBuffer);
+        int offset1, offset2;
+        for (int i = 0; i < height; i++) {
+            offset1 = i * width;
+            offset2 = (height - i - 1) * width;
+            for (int j = 0; j < width; j++) {
+                int texturePixel = buffer[offset1 + j];
+                int blue = (texturePixel >> 16) & 0xff;
+                int red = (texturePixel << 16) & 0x00ff0000;
+                source[offset2 + j] = (texturePixel & 0xff00ff00) | red | blue;
+            }
+        }
+        return Bitmap.createBitmap(source, width, height, Bitmap.Config.ARGB_8888);
+    }
+
+    private CameraState applyTopViewCamera() {
+        if (bed == null || !bed.isValid()) {
+            return null;
+        }
+        Vec3d min;
+        Vec3d max;
+        if (model != null && model.getObjectsCount() > 0) {
+            min = model.getBoundingBoxApproxMin();
+            max = model.getBoundingBoxApproxMax();
+        } else {
+            min = bed.getVolumeMin();
+            max = bed.getVolumeMax();
+        }
+        Vec3d center = min.center(max);
+        double size = Math.max(max.x - min.x, max.y - min.y);
+        if (size <= 0) {
+            size = 1;
+        }
+        double fov = Math.toRadians(FOV);
+        double distance = (size / 2.0) / Math.tan(fov / 2.0);
+        distance *= TOP_VIEW_MARGIN;
+
+        CameraState state = new CameraState(camera);
+        camera.origin.set(center);
+        camera.position.set(center.x, center.y, max.z + distance);
+        camera.up.set(0, 1, 0);
+        camera.setZoom(1f);
+        return state;
+    }
+
+    private void restoreCamera(CameraState state) {
+        camera.position.set(state.position);
+        camera.origin.set(state.origin);
+        camera.up.set(state.up);
+        camera.setZoom(state.zoom);
+    }
+
+    private static final class CameraState {
+        final Vec3d position;
+        final Vec3d origin;
+        final Vec3d up;
+        final float zoom;
+
+        CameraState(Camera camera) {
+            position = new Vec3d(camera.position);
+            origin = new Vec3d(camera.origin);
+            up = new Vec3d(camera.up);
+            zoom = camera.getZoom();
+        }
     }
 
     public double[] getProjectionMatrix() {
@@ -225,7 +428,7 @@ public class GLRenderer implements GLSurfaceView.Renderer {
         if (lastConfigUid != SliceBeam.CONFIG_UID) {
             configureBed();
         }
-        if (bed.isValid()) {
+        if (bed.isValid() && bedVisible) {
             bed.render(shadersManager, bottom, camera.getViewModelMatrix(), projectionMatrix, 1f / camera.getZoom());
         }
 

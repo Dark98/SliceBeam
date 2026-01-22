@@ -1021,7 +1021,9 @@ void GCodeGenerator::_do_export(Print& print, GCodeOutputStream &file, Thumbnail
 
     if (!export_to_binary_gcode)
         // Write information on the generator.
-        file.write_format("; %s\n\n", Slic3r::header_slic3r_generated().c_str());
+        file.write("; HEADER_BLOCK_START\n");
+        file.write_format("; %s\n", Slic3r::header_slic3r_generated().c_str());
+        file.write("; HEADER_BLOCK_END\n\n");
 
     if (! export_to_binary_gcode) {
         // if exporting gcode in ascii format, generate the thumbnails here

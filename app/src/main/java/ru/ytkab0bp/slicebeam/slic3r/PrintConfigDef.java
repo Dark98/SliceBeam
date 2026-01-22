@@ -16,7 +16,8 @@ public class PrintConfigDef {
             "tilt_up_finish_speed",
             "tilt_down_initial_speed",
             "tilt_down_finish_speed",
-            "tower_speed"
+            "tower_speed",
+            "thumbnails_format"
     );
 
     private static PrintConfigDef instance;
