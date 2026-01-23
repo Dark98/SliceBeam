@@ -16,6 +16,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Space;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
 
@@ -33,6 +34,7 @@ import ru.ytkab0bp.slicebeam.events.ObjectsListChangedEvent;
 import ru.ytkab0bp.slicebeam.events.SelectedObjectChangedEvent;
 import ru.ytkab0bp.slicebeam.recycler.PreferenceSwitchItem;
 import ru.ytkab0bp.slicebeam.recycler.SimpleRecyclerItem;
+import ru.ytkab0bp.slicebeam.render.GLRenderer;
 import ru.ytkab0bp.slicebeam.slic3r.Model;
 import ru.ytkab0bp.slicebeam.theme.ThemesRepo;
 import ru.ytkab0bp.slicebeam.utils.DoubleMatrix;
@@ -55,6 +57,77 @@ public class TransformMenu extends ListBedMenu {
     protected List<SimpleRecyclerItem> onCreateItems(boolean portrait) {
         return Arrays.asList(
                 new BedMenuItem(R.string.MenuTransformScale, R.drawable.arrow_up_right_corner_outline_24).setEnabled(hasSelection()).onClick(v -> fragment.showUnfoldMenu(new ScaleMenu(), v)),
+                new BedMenuItem(R.string.MenuTransformClone, R.drawable.square_stack_up_outline_28).setEnabled(hasSelection()).onClick(v -> {
+                    Context ctx = fragment.getContext();
+                    LinearLayout ll = new LinearLayout(ctx);
+                    ll.setOrientation(LinearLayout.VERTICAL);
+
+                    AtomicBoolean autoArrange = new AtomicBoolean(false);
+
+                    EditText countInput = new EditText(ctx);
+                    countInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+                    countInput.setHint(R.string.MenuTransformCloneCountHint);
+                    countInput.setText("1");
+                    countInput.setSelection(countInput.getText().length());
+                    countInput.setTextColor(ThemesRepo.getColor(android.R.attr.textColorPrimary));
+                    ll.addView(countInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
+                        leftMargin = rightMargin = ViewUtils.dp(21);
+                    }});
+
+                    PreferenceSwitchItem.SwitchPreferenceHolderView holderView = new PreferenceSwitchItem.SwitchPreferenceHolderView(ctx);
+                    holderView.title.setText(R.string.MenuTransformCloneAutoArrange);
+                    holderView.title.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
+                    holderView.subtitle.setVisibility(View.GONE);
+                    holderView.icon.setVisibility(View.GONE);
+                    holderView.matSwitch.setChecked(autoArrange.get());
+                    holderView.setOnClickListener(v1 -> {
+                        autoArrange.set(!autoArrange.get());
+                        holderView.matSwitch.setChecked(autoArrange.get());
+                    });
+                    ll.addView(holderView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
+                        leftMargin = rightMargin = ViewUtils.dp(8);
+                    }});
+
+                    new BeamAlertDialogBuilder(ctx)
+                            .setTitle(R.string.MenuTransformCloneCountTitle)
+                            .setView(ll)
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                                int count = 1;
+                                try {
+                                    count = Integer.parseInt(countInput.getText().toString());
+                                } catch (NumberFormatException ignored) {
+                                    count = 1;
+                                }
+                                if (count <= 0) return;
+                                int clones = count;
+                                boolean arrange = autoArrange.get();
+                                fragment.getGlView().queueEvent(() -> {
+                                    GLRenderer renderer = fragment.getGlView().getRenderer();
+                                    Model model = renderer.getModel();
+                                    int selected = renderer.getSelectedObject();
+                                    if (model == null || selected == -1) return;
+
+                                    for (int i = 0; i < clones; i++) {
+                                        model.addObject(model, selected);
+                                    }
+                                    if (arrange) {
+                                        renderer.getBed().arrange(model);
+                                        renderer.resetGlModels();
+                                    }
+                                    fragment.getGlView().requestRender();
+                                    SliceBeam.EVENT_BUS.fireEvent(new ObjectsListChangedEvent());
+                                    ViewUtils.postOnMainThread(() -> Toast.makeText(fragment.getContext(), fragment.getContext().getResources().getQuantityString(R.plurals.MenuTransformCloneSuccessCount, clones, clones), Toast.LENGTH_SHORT).show());
+                                });
+                                fragment.getGlView().requestRender();
+                            })
+                            .show();
+                    ViewUtils.postOnMainThread(() -> {
+                        countInput.requestFocus();
+                        InputMethodManager imm = (InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+                        imm.showSoftInput(countInput, 0);
+                    }, 200);
+                }),
                 new BedMenuItem(R.string.MenuTransformMirror, R.drawable.menu_transform_cut_or_mirror_28).setEnabled(hasSelection()).onClick(v -> {
                     Context ctx = fragment.getContext();
                     new BeamAlertDialogBuilder(ctx)
@@ -105,6 +178,9 @@ public class TransformMenu extends ListBedMenu {
 
         ((BedMenuItem) adapter.getItems().get(1)).setEnabled(hasSelection());
         adapter.notifyItemChanged(1);
+
+        ((BedMenuItem) adapter.getItems().get(2)).setEnabled(hasSelection());
+        adapter.notifyItemChanged(2);
     }
 
     @EventHandler(runOnMainThread = true)
@@ -114,6 +190,9 @@ public class TransformMenu extends ListBedMenu {
 
         ((BedMenuItem) adapter.getItems().get(1)).setEnabled(hasSelection());
         adapter.notifyItemChanged(1);
+
+        ((BedMenuItem) adapter.getItems().get(2)).setEnabled(hasSelection());
+        adapter.notifyItemChanged(2);
     }
 
     public final class ScaleMenu extends UnfoldMenu {

@@ -102,6 +102,14 @@
     <string name="MenuTransformScaleYValue">Y = %.2f %% | %.2f mm</string>
     <string name="MenuTransformScaleZValue">Z = %.2f %% | %.2f mm</string>
     <string name="MenuTransformScaleMM">Input in mm</string>
+    <string name="MenuTransformClone">Clone</string>
+    <string name="MenuTransformCloneCountTitle">Clone count</string>
+    <string name="MenuTransformCloneCountHint">Count</string>
+    <string name="MenuTransformCloneAutoArrange">Auto arrange after cloning</string>
+    <plurals name="MenuTransformCloneSuccessCount">
+        <item quantity="one">%d Clone Created</item>
+        <item quantity="other">%d Clones Created</item>
+    </plurals>
     <string name="MenuTransformMirror">Mirror</string>
     <string name="MenuTransformMirrorX">Mirror X</string>
     <string name="MenuTransformMirrorY">Mirror Y</string>
