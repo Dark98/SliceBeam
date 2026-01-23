@@ -1,0 +1,50 @@
+name: Android CI
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Install NDK 23.1.7779620
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;23.1.7779620"
+
+      - name: Cache Build Deps
+        id: native-dirs-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/jniImports/boost/
+            app/src/main/jniImports/oneTBB/
+            app/src/main/occt/
+          key: ${{ runner.os }}-native-dirs-${{ hashFiles('**/*.gradle*', '**/gradle.properties', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml', 'settings.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-native-dirs-
+
+      - name: Native cache status
+        run: echo "Native cache hit? ${{ steps.native-dirs-cache.outputs.cache-hit }}"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Upload Debug Build Artifact
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: Build-${{ github.run_id }}
+          path: app/build/outputs/apk/debug/*.apk

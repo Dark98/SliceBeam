@@ -24,8 +24,8 @@ android {
             cmake {
                 arguments '-DANDROID_STL=c++_shared', '-DANDROID_PLATFORM=21',
                         '-DCMAKE_BUILD_TYPE=Release', // Disabling this results in drastically degradation of slicing times on debug builds
-                        "-DSLIC3R_VERSION=\"${defaultConfig.versionName}\"",
-                        "-DSLIC3R_BUILD_ID=\"${defaultConfig.versionCode}\""
+                        "-DSLIC3R_VERSION=${defaultConfig.versionName}",
+                        "-DSLIC3R_BUILD_ID=${defaultConfig.versionCode}"
             }
         }
     }
@@ -140,10 +140,15 @@ def cmakeDir = cmakeRoot.listFiles()?.findAll { it.isDirectory() }?.sort { a, b 
 if (!cmakeDir) {
     throw new GradleException("No CMake found under ${sdkDir}/cmake")
 }
-def cmakeExe = "${cmakeDir}/bin/cmake.exe"
-def ninjaExe = "${cmakeDir}/bin/ninja.exe"
+def osName = System.getProperty("os.name").toLowerCase()
+def isWindows = osName.contains("windows")
+def isMac = osName.contains("mac")
+def cmakeExe = "${cmakeDir}/bin/cmake" + (isWindows ? ".exe" : "")
+def ninjaExe = "${cmakeDir}/bin/ninja" + (isWindows ? ".exe" : "")
 def toolchainFile = "${ndkDir}/build/cmake/android.toolchain.cmake"
 def wslExe = "${System.getenv("SystemRoot") ?: "C:/Windows"}/System32/wsl.exe"
+def prebuiltTag = isWindows ? "windows-x86_64" : (isMac ? "darwin-x86_64" : "linux-x86_64")
+def llvmBinDir = "${ndkDir}/toolchains/llvm/prebuilt/${prebuiltTag}/bin"
 
 def tbbSrc = "${rootDir}/third_party/openvdb-android/tbb-aarch64"
 def tbbBuildArm64 = "${rootDir}/third_party/openvdb-android/build-tbb-android-21-arm64"
@@ -291,6 +296,7 @@ tasks.register("buildTbbArm64") {
                     "-S", tbbSrc,
                     "-B", tbbBuildArm64,
                     "-DCMAKE_MAKE_PROGRAM=${ninjaExe}",
+                    "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
                     "-DCMAKE_TOOLCHAIN_FILE=${toolchainFile}",
                     "-DANDROID_ABI=arm64-v8a",
                     "-DANDROID_PLATFORM=android-21",
@@ -319,6 +325,7 @@ tasks.register("buildTbbArmv7") {
                     "-S", tbbSrc,
                     "-B", tbbBuildArmv7,
                     "-DCMAKE_MAKE_PROGRAM=${ninjaExe}",
+                    "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
                     "-DCMAKE_TOOLCHAIN_FILE=${toolchainFile}",
                     "-DANDROID_ABI=armeabi-v7a",
                     "-DANDROID_PLATFORM=android-21",
@@ -428,14 +435,20 @@ tasks.register("buildBoostArm64") {
     dependsOn("patchBoostForAndroid")
     onlyIf { !file("${projectDir}/src/main/jniImports/boost/lib/arm64-v8a/lib/libboost_atomic-clang-mt-a64-1_85.a").exists() }
     doLast {
-        if (!file(wslExe).exists()) {
-            throw new GradleException("WSL is required to build Boost. Install WSL or provide prebuilt Boost libs.")
-        }
-        def ndkWsl = toWslPath(ndkDir)
-        def boostWsl = toWslPath(boostDir)
-        def binWsl = toWslPath("${ndkDir}/toolchains/llvm/prebuilt/windows-x86_64/bin")
-        exec {
-            commandLine wslExe, "bash", "-lc", "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/aarch64-linux-android21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=arm64-v8a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+        if (isWindows) {
+            if (!file(wslExe).exists()) {
+                throw new GradleException("WSL is required to build Boost on Windows. Install WSL or provide prebuilt Boost libs.")
+            }
+            def ndkWsl = toWslPath(ndkDir)
+            def boostWsl = toWslPath(boostDir)
+            def binWsl = toWslPath(llvmBinDir)
+            exec {
+                commandLine wslExe, "bash", "-lc", "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/aarch64-linux-android21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=arm64-v8a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            }
+        } else {
+            exec {
+                commandLine "bash", "-lc", "set -euo pipefail; cd ${boostDir}; chmod +x ${llvmBinDir}/aarch64-linux-android21-clang++ ${llvmBinDir}/llvm-ar ${llvmBinDir}/llvm-ranlib || true; ./build-android.sh ${ndkDir} --boost=1.85.0 --arch=arm64-v8a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            }
         }
     }
 }
@@ -444,14 +457,20 @@ tasks.register("buildBoostArmv7") {
     dependsOn("patchBoostForAndroid")
     onlyIf { !file("${projectDir}/src/main/jniImports/boost/lib/armeabi-v7a/lib/libboost_atomic-clang-mt-a32-1_85.a").exists() }
     doLast {
-        if (!file(wslExe).exists()) {
-            throw new GradleException("WSL is required to build Boost. Install WSL or provide prebuilt Boost libs.")
-        }
-        def ndkWsl = toWslPath(ndkDir)
-        def boostWsl = toWslPath(boostDir)
-        def binWsl = toWslPath("${ndkDir}/toolchains/llvm/prebuilt/windows-x86_64/bin")
-        exec {
-            commandLine wslExe, "bash", "-lc", "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/armv7a-linux-androideabi21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=armeabi-v7a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+        if (isWindows) {
+            if (!file(wslExe).exists()) {
+                throw new GradleException("WSL is required to build Boost on Windows. Install WSL or provide prebuilt Boost libs.")
+            }
+            def ndkWsl = toWslPath(ndkDir)
+            def boostWsl = toWslPath(boostDir)
+            def binWsl = toWslPath(llvmBinDir)
+            exec {
+                commandLine wslExe, "bash", "-lc", "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/armv7a-linux-androideabi21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=armeabi-v7a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            }
+        } else {
+            exec {
+                commandLine "bash", "-lc", "set -euo pipefail; cd ${boostDir}; chmod +x ${llvmBinDir}/armv7a-linux-androideabi21-clang++ ${llvmBinDir}/llvm-ar ${llvmBinDir}/llvm-ranlib || true; ./build-android.sh ${ndkDir} --boost=1.85.0 --arch=armeabi-v7a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            }
         }
     }
 }
