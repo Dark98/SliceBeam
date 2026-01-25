@@ -165,6 +165,11 @@ public class PrinterConfigFragment extends ProfileListFragment {
             ));
         }
         list.addAll(Arrays.asList(
+                new OptionElement(R.drawable.settings_outline_28, "Advanced"),
+                new OptionElement(new SubHeader("Auto arrange")),
+                new OptionElement(def.options.get("auto_arrange_bed_clearance")),
+                new OptionElement(def.options.get("auto_arrange_rotate")),
+
                 new OptionElement(R.drawable.note_pen_outline_96, "Notes"),
                 new OptionElement(new SubHeader("Notes")),
                 new OptionElement(def.options.get("printer_notes")),

@@ -88,9 +88,6 @@ public class Bed3D {
         assertTrue(projectionMatrix.length == 16);
 
         DoubleMatrix.setIdentityM(modelMatrix, 0);
-        if (!likelyDelta) {
-            DoubleMatrix.translateM(modelMatrix, 0, -getVolumeMin().x * 2, -getVolumeMin().y * 2, -getVolumeMin().z);
-        }
         DoubleMatrix.multiplyMM(outModelMatrix, 0, viewModelMatrix, 0, modelMatrix, 0);
         renderDefaultBed(shadersManager, bottom, outModelMatrix, projectionMatrix);
         axes.render(shadersManager, viewModelMatrix, projectionMatrix, 0.25f, invZoom);

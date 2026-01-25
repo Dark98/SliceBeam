@@ -23,6 +23,7 @@
 
 #include <igl/unproject.h>
 #include <GLES3/gl3.h>
+#include <algorithm>
 
 using namespace Slic3r;
 using namespace Slic3r::GUI;
@@ -1428,7 +1429,64 @@ extern "C" {
         DynamicPrintConfig config = ref->config;
         arr2::ArrangeBed bed = arr2::to_arrange_bed(get_bed_shape(config));
         arr2::ArrangeSettings arrange_cfg;
-        return arrange_objects(mRef->model, bed, arrange_cfg);
+        arrange_cfg.set_arrange_strategy(arr2::ArrangeSettingsView::asPullToCenter);
+        arrange_cfg.set_xl_alignment(arr2::ArrangeSettingsView::xlpCenter);
+        float bed_clearance = 5.0f;
+        if (const auto* clearance_opt = config.opt<ConfigOptionFloat>("auto_arrange_bed_clearance")) {
+            bed_clearance = clearance_opt->value;
+        }
+        arrange_cfg.set_distance_from_bed(bed_clearance);
+        bool allow_rotation = false;
+        if (const auto* rotate_opt = config.opt<ConfigOptionBool>("auto_arrange_rotate")) {
+            allow_rotation = rotate_opt->value;
+        }
+        arrange_cfg.set_rotation_enabled(allow_rotation);
+        const bool arranged = arrange_objects(mRef->model, bed, arrange_cfg);
+
+        if (!mRef->model.objects.empty()) {
+            const BoundingBoxf3 bed_bb = ref->build_volume.bounding_volume();
+            const BoundingBoxf3 pile_bb = mRef->model.bounding_box_exact();
+            const double margin = arrange_cfg.get_distance_from_bed();
+
+            const double allowed_min_x = bed_bb.min.x() + margin;
+            const double allowed_max_x = bed_bb.max.x() - margin;
+            const double allowed_min_y = bed_bb.min.y() + margin;
+            const double allowed_max_y = bed_bb.max.y() - margin;
+
+            const double width = pile_bb.size().x();
+            const double height = pile_bb.size().y();
+            const Vec3d pile_center = pile_bb.center();
+
+            const double min_center_x = allowed_min_x + width * 0.5;
+            const double max_center_x = allowed_max_x - width * 0.5;
+            const double min_center_y = allowed_min_y + height * 0.5;
+            const double max_center_y = allowed_max_y - height * 0.5;
+
+            double target_center_x = pile_center.x();
+            if (min_center_x <= max_center_x) {
+                target_center_x = std::max(min_center_x, std::min(pile_center.x(), max_center_x));
+            } else {
+                target_center_x = (allowed_min_x + allowed_max_x) * 0.5;
+            }
+
+            double target_center_y = pile_center.y();
+            if (min_center_y <= max_center_y) {
+                target_center_y = std::max(min_center_y, std::min(pile_center.y(), max_center_y));
+            } else {
+                target_center_y = (allowed_min_y + allowed_max_y) * 0.5;
+            }
+
+            const double dx = target_center_x - pile_center.x();
+            const double dy = target_center_y - pile_center.y();
+            if (std::abs(dx) > 1e-6 || std::abs(dy) > 1e-6) {
+                const Vec3d shift(dx, dy, 0.0);
+                for (ModelObject* obj : mRef->model.objects) {
+                    obj->translate_instances(shift);
+                }
+            }
+        }
+
+        return arranged;
     }
 
     JNIEXPORT jdoubleArray JNICALL Java_ru_ytkab0bp_slicebeam_slic3r_Native_bed_1get_1bounding_1volume(JNIEnv* env, jclass, jlong ptr) {

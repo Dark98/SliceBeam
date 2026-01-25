@@ -345,6 +345,20 @@ void PrintConfigDef::init_common_params()
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionPoints{ Vec2d(0, 0), Vec2d(200, 0), Vec2d(200, 200), Vec2d(0, 200) });
 
+    def = this->add("auto_arrange_bed_clearance", coFloat);
+    def->label = L("Auto-arrange bed clearance");
+    def->tooltip = L("Minimum distance from the bed edge when auto arranging.");
+    def->sidetext = L("mm");
+    def->min = 0;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(5.0));
+
+    def = this->add("auto_arrange_rotate", coBool);
+    def->label = L("Auto-arrange rotation");
+    def->tooltip = L("Allow auto-arrange to rotate objects on the bed.");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionBool(true));
+
     def = this->add("bed_custom_texture", coString);
     def->label = L("Bed custom texture");
     def->mode = comAdvanced;

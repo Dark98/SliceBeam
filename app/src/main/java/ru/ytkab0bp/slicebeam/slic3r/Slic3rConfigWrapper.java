@@ -80,7 +80,7 @@ public class Slic3rConfigWrapper {
     );
     public final static List<String> PRINTER_CONFIG_KEYS = Arrays.asList(
             "printer_technology", "autoemit_temperature_commands",
-            "bed_shape", "bed_custom_texture", "bed_custom_model", "binary_gcode", "z_offset", "gcode_flavor", "use_relative_e_distances",
+            "bed_shape", "auto_arrange_bed_clearance", "auto_arrange_rotate", "bed_custom_texture", "bed_custom_model", "binary_gcode", "z_offset", "gcode_flavor", "use_relative_e_distances",
             "use_firmware_retraction", "use_volumetric_e", "variable_layer_height", "prefer_clockwise_movements",
             //FIXME the print host keys are left here just for conversion from the Printer preset to Physical Printer preset.
             "host_type", "print_host", "printhost_apikey", "printhost_cafile",

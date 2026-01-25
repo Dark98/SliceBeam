@@ -92,6 +92,8 @@ public class ConfigObject implements ProfileListFragment.ProfileListItem {
         ConfigObject custom = new ConfigObject(SliceBeam.INSTANCE.getString(R.string.IntroCustomProfileName));
         custom.put("printer_technology", "FFF");
         custom.put("bed_shape", "0x0,200x0,200x200,0x200");
+        custom.put("auto_arrange_bed_clearance", "5");
+        custom.put("auto_arrange_rotate", "1");
         custom.put("binary_gcode", "0");
         custom.put("gcode_flavor", "marlin");
         custom.put("max_print_height", "200");
