@@ -30,6 +30,7 @@
 #include "FillAdaptive.hpp"
 #include "FillLightning.hpp"
 #include "FillEnsuring.hpp"
+#include "FillCrossHatch.hpp"
 
 #include <boost/log/trivial.hpp>
 
@@ -60,6 +61,7 @@ Fill* Fill::new_from_type(const InfillPattern type)
     case ipSupportCubic:        return new FillAdaptive::Filler();
     case ipSupportBase:         return new FillSupportBase();
     case ipLightning:           return new FillLightning::Filler();
+    case ipCrossHatch:          return new FillCrossHatch();
     case ipEnsuring:            return new FillEnsuring();
     default: throw Slic3r::InvalidArgument("unknown type");
     }

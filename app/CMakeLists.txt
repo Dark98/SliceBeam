@@ -782,6 +782,8 @@ add_library(slic3r
         src/main/jni/libslic3r/Fill/FillBase.hpp
         src/main/jni/libslic3r/Fill/FillConcentric.cpp
         src/main/jni/libslic3r/Fill/FillConcentric.hpp
+        src/main/jni/libslic3r/Fill/FillCrossHatch.cpp
+        src/main/jni/libslic3r/Fill/FillCrossHatch.hpp
         src/main/jni/libslic3r/Fill/FillEnsuring.cpp
         src/main/jni/libslic3r/Fill/FillEnsuring.hpp
         src/main/jni/libslic3r/Fill/FillHoneycomb.cpp
