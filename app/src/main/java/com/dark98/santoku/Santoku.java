@@ -75,13 +75,40 @@ public class Santoku extends Application {
     }
 
     public static void saveConfig() {
+        if (CONFIG == null) {
+            return;
+        }
         Santoku.CONFIG_UID++;
         File f = getConfigFile();
+        File dir = f.getParentFile();
+        if (dir != null && !dir.exists()) {
+            // Best effort: ensure app files dir exists before saving.
+            //noinspection ResultOfMethodCallIgnored
+            dir.mkdirs();
+        }
+        String serialized = CONFIG.serialize();
         try {
-            FileOutputStream fos = new FileOutputStream(f);
-            fos.write(CONFIG.serialize().getBytes(StandardCharsets.UTF_8));
+            File tmp = new File(f.getParentFile(), f.getName() + ".tmp");
+            FileOutputStream fos = new FileOutputStream(tmp);
+            fos.write(serialized.getBytes(StandardCharsets.UTF_8));
+            fos.getFD().sync();
             fos.close();
 
+            if (f.exists() && !f.delete()) {
+                Log.w("Config", "Failed to delete old config before rename: " + f.getAbsolutePath());
+            }
+            if (!tmp.renameTo(f)) {
+                // Fallback to direct write if rename fails.
+                FileOutputStream direct = new FileOutputStream(f);
+                direct.write(serialized.getBytes(StandardCharsets.UTF_8));
+                direct.getFD().sync();
+                direct.close();
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
+
+            // Current config should be regenerated on next slice/export.
+            //noinspection ResultOfMethodCallIgnored
             getCurrentConfigFile().delete();
         } catch (Exception e) {
             Log.e("Config", "Failed to save config", e);

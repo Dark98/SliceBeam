@@ -200,7 +200,12 @@ public class Slic3rConfigWrapper {
             sb.append("[").append(key).append(":").append(cfg.getTitle()).append("]\n");
 
             for (Map.Entry<String, String> en : cfg.values.entrySet()) {
-                sb.append(en.getKey()).append(" = ").append(en.getValue().replace("\n", "\\n")).append("\n");
+                String value = en.getValue();
+                if (value != null) {
+                    value = value.replace("\r\n", "\n").replace("\r", "\n");
+                    value = value.replace("\n", "\\n");
+                }
+                sb.append(en.getKey()).append(" = ").append(value).append("\n");
             }
             sb.append("\n");
         }
@@ -216,7 +221,12 @@ public class Slic3rConfigWrapper {
         if (presets != null) {
             sb.append("[presets]\n");
             for (Map.Entry<String, String> en : presets.values.entrySet()) {
-                sb.append(en.getKey()).append(" = ").append(en.getValue().replace("\n", "\\n")).append("\n");
+                String value = en.getValue();
+                if (value != null) {
+                    value = value.replace("\r\n", "\n").replace("\r", "\n");
+                    value = value.replace("\n", "\\n");
+                }
+                sb.append(en.getKey()).append(" = ").append(value).append("\n");
             }
         }
 

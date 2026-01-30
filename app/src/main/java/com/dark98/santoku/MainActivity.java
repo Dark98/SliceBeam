@@ -880,6 +880,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStop() {
+        super.onStop();
+        Santoku.saveConfig();
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         if (activeInstance == this) {
