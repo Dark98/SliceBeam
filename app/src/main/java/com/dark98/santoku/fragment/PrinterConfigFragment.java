@@ -196,6 +196,27 @@ public class PrinterConfigFragment extends ProfileListFragment {
                     new OptionElement(def.options.get("elegoolink_bed_type"))
             ));
         }
+        if ("moonraker".equalsIgnoreCase(hostType) || "klipper".equalsIgnoreCase(hostType)) {
+            int insertIndex = list.size();
+            for (int i = 0; i < list.size(); i++) {
+                OptionElement el = list.get(i);
+                if (el != null && el.simpleItem instanceof SubHeader) {
+                    String title = ((SubHeader) el.simpleItem).title;
+                    if ("Advanced".equals(title)) {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+            }
+            list.addAll(insertIndex, Arrays.asList(
+                    new OptionElement(new SubHeader("Adaptive bed mesh")),
+                    new OptionElement(def.options.get("bed_mesh_probe_distance")),
+                    new OptionElement(def.options.get("bed_mesh_limit_min")),
+                    new OptionElement(def.options.get("bed_mesh_limit_max")),
+                    new OptionElement(def.options.get("adaptive_bed_mesh_margin")),
+                    new OptionElement(new SpaceItem(0, ViewUtils.dp(4)))
+            ));
+        }
 
         return list;
     }

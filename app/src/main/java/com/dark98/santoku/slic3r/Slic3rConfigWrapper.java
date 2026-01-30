@@ -96,7 +96,8 @@ public class Slic3rConfigWrapper {
             "machine_max_feedrate_x", "machine_max_feedrate_y", "machine_max_feedrate_z", "machine_max_feedrate_e",
             "machine_min_extruding_rate", "machine_min_travel_rate",
             "machine_max_jerk_x", "machine_max_jerk_y", "machine_max_jerk_z", "machine_max_jerk_e",
-            "elegoolink_timelapse", "elegoolink_bed_leveling", "elegoolink_bed_type"
+            "elegoolink_timelapse", "elegoolink_bed_leveling", "elegoolink_bed_type",
+            "bed_mesh_probe_distance", "bed_mesh_limit_min", "bed_mesh_limit_max", "adaptive_bed_mesh_margin"
     );
     public final static List<String> PHYSICAL_PRINTER_CONFIG_KEYS = Arrays.asList(
             "preset_name", // temporary option to compatibility with older Slicer

@@ -346,6 +346,35 @@ void PrintConfigDef::init_common_params()
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionPoints{ Vec2d(0, 0), Vec2d(200, 0), Vec2d(200, 200), Vec2d(0, 200) });
 
+    def = this->add("bed_mesh_limit_min", coPoint);
+    def->label = L("Bed mesh min");
+    def->tooltip = L("Minimum point for allowed bed mesh area. Default is no limits.");
+    def->sidetext = L("mm");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionPoint(Vec2d(-99999, -99999)));
+
+    def = this->add("bed_mesh_limit_max", coPoint);
+    def->label = L("Bed mesh max");
+    def->tooltip = L("Maximum point for allowed bed mesh area. Default is no limits.");
+    def->sidetext = L("mm");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionPoint(Vec2d(-99999, -99999)));
+
+    def = this->add("bed_mesh_probe_distance", coPoint);
+    def->label = L("Probe point distance");
+    def->tooltip = L("Distance between probe points for bed mesh, as X,Y.");
+    def->sidetext = L("mm");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionPoint(Vec2d(25, 25)));
+
+    def = this->add("adaptive_bed_mesh_margin", coFloat);
+    def->label = L("Mesh margin");
+    def->tooltip = L("Extra margin around first-layer print area used for adaptive bed mesh.");
+    def->sidetext = L("mm");
+    def->min = 0;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.0));
+
     def = this->add("auto_arrange_bed_clearance", coFloat);
     def->label = L("Auto-arrange bed clearance");
     def->tooltip = L("Minimum distance from the bed edge when auto arranging.");
@@ -2241,7 +2270,7 @@ void PrintConfigDef::init_fff_params()
         { "prusalink",      "PrusaLink" },
         { "prusaconnect",   "PrusaConnect" },
         { "octoprint",      "OctoPrint" },
-        { "moonraker",      "Klipper (via Moonraker)" },
+        { "moonraker",      "Klipper (Moonraker)" },
         { "duet",           "Duet" },
         { "flashair",       "FlashAir" },
         { "astrobox",       "AstroBox" },
