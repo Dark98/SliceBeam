@@ -47,13 +47,13 @@ var dark = $['is_dark_theme'];
 document.getElementsByClassName('md-option')[dark ? 1 : 0].click();
 
 beginSaveFile = function(filename) {
-    SliceBeam.beginDownload(filename);
+    Santoku.beginDownload(filename);
 }
 
 writeToFile = function(data) {
-    SliceBeam.writeData(btoa(unescape(encodeURIComponent(data))));
+    Santoku.writeData(btoa(unescape(encodeURIComponent(data))));
 }
 
 finishFile = function() {
-    SliceBeam.finishDownload();
+    Santoku.finishDownload();
 }

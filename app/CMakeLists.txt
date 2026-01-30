@@ -8,7 +8,7 @@ include(CheckLibraryExists)
 include(GenerateExportHeader)
 include(CheckCSourceCompiles)
 
-project(SliceBeam)
+project(Santoku)
 cmake_minimum_required(VERSION 3.4.1)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -1241,9 +1241,9 @@ add_library(slic3r
 
         src/main/jni/bbl/Orient.cpp
 
-        src/main/jni/slicebeam/beam_native.cpp
-        src/main/jni/slicebeam/GLModel.cpp
-        src/main/jni/slicebeam/GLShader.cpp
+        src/main/jni/santoku/beam_native.cpp
+        src/main/jni/santoku/GLModel.cpp
+        src/main/jni/santoku/GLShader.cpp
 
 #        $<TARGET_OBJECTS:simd>
 )

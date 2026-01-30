@@ -47,7 +47,7 @@ var dark = $['is_dark_theme'];
 document.getElementsByClassName('md-option')[dark ? 1 : 0].click();
 
 saveTextAsFile = function(filename, text) {
-    SliceBeam.beginDownload(filename);
-    SliceBeam.writeData(btoa(unescape(encodeURIComponent(text))));
-    SliceBeam.finishDownload();
+    Santoku.beginDownload(filename);
+    Santoku.writeData(btoa(unescape(encodeURIComponent(text))));
+    Santoku.finishDownload();
 }

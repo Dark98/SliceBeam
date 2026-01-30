@@ -1,5 +1,5 @@
 <resources>
-    <string name="AppName" translatable="false">Slice Beam</string>
+    <string name="AppName" translatable="false">Santoku</string>
     <string name="SlotBed">Preview</string>
     <string name="SlotPrintConfig">Print</string>
     <string name="SlotPrintConfigTooltip">Print profile</string>

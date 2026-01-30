@@ -22,8 +22,8 @@
         android:icon="@mipmap/icon"
         android:label="@string/AppName"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SliceBeam"
-        android:name=".SliceBeam"
+        android:theme="@style/Theme.Santoku"
+        android:name=".Santoku"
         android:usesCleartextTraffic="true"
         android:largeHeap="true"
         android:isGame="false"
@@ -35,7 +35,7 @@
             android:windowSoftInputMode="adjustPan"
             android:configChanges="uiMode"
             android:exported="true"
-            android:theme="@style/Theme.SliceBeam">
+            android:theme="@style/Theme.Santoku">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -55,7 +55,7 @@
         <activity android:name=".SetupActivity" android:exported="false"/>
         <activity android:name=".SafeStartActivity" android:exported="false"/>
         <provider
-            android:authorities="ru.ytkab0bp.slicebeam.provider"
+            android:authorities="com.dark98.santoku.provider"
             android:name="androidx.core.content.FileProvider"
             android:grantUriPermissions="true"
             android:exported="false">

@@ -544,7 +544,7 @@ namespace Slic3r {
         enum class EProducer
         {
             Unknown,
-            SliceBeam,
+            Santoku,
             PrusaSlicer,
             Slic3rPE,
             Slic3r,
