@@ -691,8 +691,8 @@ public abstract class ProfileListFragment extends Fragment {
                         String[] labels;
                         String[] values;
                         if (Objects.equals("host_type", def.key)) {
-                            labels = new String[]{"OctoPrint", "ElegooLink"};
-                            values = new String[]{"octoprint", "elegoolink"};
+                            labels = new String[]{"OctoPrint", "Klipper (Moonraker)", "ElegooLink"};
+                            values = new String[]{"octoprint", "moonraker", "elegoolink"};
                         } else {
                             labels = new String[def.enumLabels.length];
                             values = def.enumValues;

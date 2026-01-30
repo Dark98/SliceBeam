@@ -77,7 +77,7 @@ public class SliceMenu extends ListBedMenu {
         client.setMaxRetriesAndTimeout(0, 10000);
     }
 
-    private final static List<String> SUPPORTED_SEND = Arrays.asList("octoprint", "elegoolink");
+    private final static List<String> SUPPORTED_SEND = Arrays.asList("octoprint", "klipper", "moonraker", "elegoolink");
     private int lastUid;
 
     @Override
@@ -132,9 +132,9 @@ public class SliceMenu extends ListBedMenu {
     private void upload(String type, String host, String apiKey, boolean print, ConfigObject config) {
         String name = fragment.getGlView().getRenderer().getGcodeResult().getRecommendedName();
         switch (type) {
-            default:
-            case "octoprint":
-                if (!host.startsWith("http://")) {
+            case "klipper":
+            case "moonraker": {
+                if (!host.startsWith("http://") && !host.startsWith("https://")) {
                     host = "http://" + host;
                 }
                 String tag = UUID.randomUUID().toString();
@@ -149,13 +149,24 @@ public class SliceMenu extends ListBedMenu {
                 params.put("select", String.valueOf(print));
                 params.put("print", String.valueOf(print));
 
-                client.post(Santoku.INSTANCE, host + "/api/files/local", headers, params, null, new AsyncHttpResponseHandler() {
+                String url = host + "/server/files/upload";
+                client.post(Santoku.INSTANCE, url, headers, params, null, new AsyncHttpResponseHandler() {
                     @Override
                     public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
                         try {
                             JSONObject obj = new JSONObject(new String(responseBody));
-                            if (!obj.has("action") && !obj.has("files")) {
-                                throw new JSONException(obj.toString());
+                            // Moonraker responses may wrap data in "result"
+                            JSONObject payload = obj;
+                            if (obj.has("result") && obj.opt("result") instanceof JSONObject) {
+                                payload = obj.optJSONObject("result");
+                            }
+                            // Moonraker upload response includes "item" + "action" + "print_started"
+                            boolean success = payload != null && (payload.has("item")
+                                    || payload.has("action")
+                                    || payload.has("print_started")
+                                    || payload.has("print_queued"));
+                            if (!success) {
+                                throw new JSONException("Unexpected response: " + obj.toString());
                             }
                             Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(tag));
                             Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(print ? SnackbarsLayout.Type.INFO : SnackbarsLayout.Type.DONE, print ? R.string.MenuSliceSendToPrinterPrintStarted : R.string.MenuSliceSendToPrinterOK));
@@ -174,7 +185,53 @@ public class SliceMenu extends ListBedMenu {
                                 .show());
                     }
                 });
-                    break;
+                break;
+            }
+            default:
+            case "octoprint":
+                if (!host.startsWith("http://") && !host.startsWith("https://")) {
+                    host = "http://" + host;
+                }
+                String tag = UUID.randomUUID().toString();
+                Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.LOADING, R.string.MenuSliceSendToPrinterLoading).tag(tag));
+                Header[] headers = TextUtils.isEmpty(apiKey) ? new Header[0] : new Header[] {new BasicHeader("X-Api-Key", apiKey)};
+                RequestParams params = new RequestParams();
+                try {
+                    params.put("file", new FileInputStream(BedFragment.getTempGCodePath()), name, ContentType.TEXT_PLAIN.getMimeType());
+                } catch (FileNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+                params.put("select", String.valueOf(print));
+                params.put("print", String.valueOf(print));
+
+                String url = host + "/api/files/local";
+                client.post(Santoku.INSTANCE, url, headers, params, null, new AsyncHttpResponseHandler() {
+                    @Override
+                    public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
+                        try {
+                            JSONObject obj = new JSONObject(new String(responseBody));
+                            // OctoPrint: check for "action" or "files"
+                            if (!obj.has("action") && !obj.has("files")) {
+                                throw new JSONException("Unexpected response: " + obj.toString());
+                            }
+                            Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(tag));
+                            Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(print ? SnackbarsLayout.Type.INFO : SnackbarsLayout.Type.DONE, print ? R.string.MenuSliceSendToPrinterPrintStarted : R.string.MenuSliceSendToPrinterOK));
+                        } catch (JSONException e) {
+                            onFailure(statusCode, headers, responseBody, e);
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(int statusCode, Header[] headers, byte[] responseBody, Throwable error) {
+                        Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(tag));
+                        ViewUtils.postOnMainThread(() -> new BeamAlertDialogBuilder(fragment.getContext())
+                                .setTitle(R.string.MenuSliceSendToPrinterFailed)
+                                .setMessage(error.toString())
+                                .setPositiveButton(android.R.string.ok, null)
+                                .show());
+                    }
+                });
+                break;
             case "elegoolink": {
                 if (!host.startsWith("http://") && !host.startsWith("https://")) {
                     host = "http://" + host;
