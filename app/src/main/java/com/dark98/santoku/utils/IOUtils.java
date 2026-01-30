@@ -4,6 +4,7 @@ import android.content.ContentResolver;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.text.TextUtils;
 
 import org.json.JSONArray;
@@ -32,18 +33,37 @@ public class IOUtils {
     public static String getDisplayName(Uri uri) {
         ContentResolver resolver = Santoku.INSTANCE.getContentResolver();
 
-        String[] projection = {MediaStore.MediaColumns.DISPLAY_NAME};
-        Cursor metaCursor = resolver.query(uri, projection, null, null, null);
         String fileName = null;
-        if (metaCursor != null) {
-            try {
-                if (metaCursor.moveToFirst()) {
-                    fileName = metaCursor.getString(0);
-                }
-            } finally {
+        Cursor metaCursor = null;
+        try {
+            String[] projection = {OpenableColumns.DISPLAY_NAME};
+            metaCursor = resolver.query(uri, projection, null, null, null);
+            if (metaCursor != null && metaCursor.moveToFirst()) {
+                fileName = metaCursor.getString(0);
+            }
+        } catch (Exception ignored) {
+            // Some providers throw for query; fall back below.
+        } finally {
+            if (metaCursor != null) {
                 metaCursor.close();
             }
         }
+
+        if (fileName == null) {
+            try {
+                String path = uri.getPath();
+                if (path != null) {
+                    int idx = path.lastIndexOf('/');
+                    if (idx != -1 && idx + 1 < path.length()) {
+                        fileName = path.substring(idx + 1);
+                    } else if (!path.isEmpty()) {
+                        fileName = path;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
         return fileName;
     }
     public static String readString(InputStream in) throws IOException {
