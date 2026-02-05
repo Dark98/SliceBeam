@@ -24,6 +24,7 @@ import android.net.Uri;
 import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.InputType;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.util.Log;
@@ -35,6 +36,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.EditText;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -60,6 +63,7 @@ import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
+import ru.ytkab0bp.sapil.APICallback;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -94,8 +98,6 @@ import com.dark98.santoku.cloud.CloudController;
 import com.dark98.santoku.components.BeamAlertDialogBuilder;
 import com.dark98.santoku.components.CloudManageBottomSheet;
 import com.dark98.santoku.config.ConfigObject;
-import com.dark98.santoku.events.BeamServerDataUpdatedEvent;
-import com.dark98.santoku.events.CloudFeaturesUpdatedEvent;
 import com.dark98.santoku.events.CloudLoginStateUpdatedEvent;
 import com.dark98.santoku.events.CloudSyncFinishedEvent;
 import com.dark98.santoku.recycler.BigHeaderItem;
@@ -114,14 +116,12 @@ import com.dark98.santoku.theme.ThemesRepo;
 import com.dark98.santoku.utils.Prefs;
 import com.dark98.santoku.utils.ViewUtils;
 import com.dark98.santoku.view.BeamSwitch;
-import com.dark98.santoku.view.BoostySubsView;
 import com.dark98.santoku.view.FadeRecyclerView;
 import com.dark98.santoku.view.MiniColorView;
 import com.dark98.santoku.view.TextColorImageSpan;
 
 public class SetupActivity extends AppCompatActivity {
     public final static String EXTRA_ABOUT = "about";
-    public final static String EXTRA_BOOSTY_ONLY = "boosty_only";
     public final static String EXTRA_CLOUD_PROFILE = "cloud_profile";
     public final static String EXTRA_CLOUD_IMPORT_FROM_SETUP = "cloud_import_from_setup";
 
@@ -129,12 +129,11 @@ public class SetupActivity extends AppCompatActivity {
 
     private final static List<String> REPOS_URLS = Arrays.asList(
             "https://preset-repo-api.prusa3d.com/v1/repos",
-            "https://raw.githubusercontent.com/utkabobr/SliceBeam/refs/heads/master/.profiledumpsrepo/manifest.json"
+            "https://raw.githubusercontent.com/Dark98/SliceBeam/refs/heads/master/.profiledumpsrepo/manifest.json"
     );
 
     private final static int REPOS_INDEX = 1;
     private final static int PROFILES_INDEX = 2;
-    private static int BOOSTY_INDEX = 3;
 
     private final static int TYPE_PRINTER = 0, TYPE_PRINT_CONFIG = 1, TYPE_FILAMENT = 2;
 
@@ -148,7 +147,6 @@ public class SetupActivity extends AppCompatActivity {
 
     private int titleY;
     private float backgroundProgress;
-    private float boostyProgress;
 
     private SpringAnimation fakeScroller;
 
@@ -166,7 +164,6 @@ public class SetupActivity extends AppCompatActivity {
     private Map<ProfilesRepo, List<Slic3rConfigWrapper>> profilesMap = new HashMap<>();
     private boolean isProfilesLoaded;
     private boolean about;
-    private boolean boostyOnly;
     private boolean cloudProfile;
     private boolean cloudImport;
 
@@ -185,11 +182,10 @@ public class SetupActivity extends AppCompatActivity {
         Santoku.EVENT_BUS.registerListener(this);
 
         about = getIntent().getBooleanExtra(EXTRA_ABOUT, false);
-        boostyOnly = getIntent().getBooleanExtra(EXTRA_BOOSTY_ONLY, false);
         cloudProfile = getIntent().getBooleanExtra(EXTRA_CLOUD_PROFILE, false);
         cloudImport = getIntent().getBooleanExtra(EXTRA_CLOUD_IMPORT_FROM_SETUP, false);
 
-        if (!about && !boostyOnly && !cloudProfile) {
+        if (!about && !cloudProfile) {
             new BeamAlertDialogBuilder(this)
                     .setTitle(R.string.IntroEarlyAccess)
                     .setMessage(R.string.IntroEarlyAccessMessage)
@@ -197,7 +193,7 @@ public class SetupActivity extends AppCompatActivity {
                     .show();
         }
 
-        if (boostyOnly || cloudProfile) {
+        if (cloudProfile) {
             backgroundProgress = 1f;
         }
 
@@ -205,7 +201,7 @@ public class SetupActivity extends AppCompatActivity {
         adapter = new SimpleRecyclerAdapter() {
             @Override
             public int getItemCount() {
-                return about || boostyOnly || cloudProfile ? 1 : limitRepoFragmentCount ? REPOS_INDEX + 1 : limitProfileFragmentCount ? PROFILES_INDEX + 1 : super.getItemCount();
+                return about || cloudProfile ? 1 : limitRepoFragmentCount ? REPOS_INDEX + 1 : limitProfileFragmentCount ? PROFILES_INDEX + 1 : super.getItemCount();
             }
         };
         setItems();
@@ -236,23 +232,10 @@ public class SetupActivity extends AppCompatActivity {
 
             @Override
             public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-                if (position == 0 && !boostyOnly && !cloudProfile) {
+                if (position == 0 && !cloudProfile) {
                     backgroundProgress = positionOffset;
                 } else {
                     backgroundProgress = 1f;
-                }
-
-                if (boostyOnly) {
-                    boostyProgress = 1f;
-                } else if (position == BOOSTY_INDEX) {
-                    boostyProgress = 1f - positionOffset;
-                } else if (position == BOOSTY_INDEX - 1) {
-                    boostyProgress = positionOffset;
-                } else {
-                    boostyProgress = 0f;
-                }
-                if (profilesItem != null && profilesItem.recyclerView != null) {
-                    profilesItem.recyclerView.setOverlayAlpha(1f - boostyProgress);
                 }
 
                 if (position == REPOS_INDEX) {
@@ -434,17 +417,13 @@ public class SetupActivity extends AppCompatActivity {
                     shader.startUsing();
                     int topColor = ThemesRepo.getColor(android.R.attr.colorAccent);
                     int bottomColor = ThemesRepo.getColor(android.R.attr.windowBackground);
-                    if (boostyProgress != 0f) {
-                        topColor = ColorUtils.blendARGB(bottomColor, ThemesRepo.getColor(R.attr.boostyColorTop), boostyProgress);
-                        bottomColor = ColorUtils.blendARGB(bottomColor, ThemesRepo.getColor(R.attr.boostyColorBottom), boostyProgress);
-                    }
                     if (cloudProfile) {
                         bottomColor = ColorUtils.blendARGB(bottomColor, topColor, 0.5f);
                     }
 
                     shader.setUniformColor("top_color", topColor);
                     shader.setUniformColor("bottom_color", bottomColor);
-                    shader.setUniform("progress", backgroundProgress - (cloudProfile ? 1.4f : 0) - (boostyProgress != 0 ? 1.2f : 0));
+                    shader.setUniform("progress", backgroundProgress - (cloudProfile ? 1.4f : 0));
                     shader.setUniform("time", time);
                     backgroundModel.render();
                     shader.stopUsing();
@@ -489,7 +468,7 @@ public class SetupActivity extends AppCompatActivity {
         title.setPivotY(0);
         title.setScaleX(sc);
         title.setScaleY(sc);
-        int color = ColorUtils.blendARGB(ThemesRepo.getColor(R.attr.textColorOnAccent), ThemesRepo.getColor(android.R.attr.colorAccent), cloudProfile ? 0f : backgroundProgress - boostyProgress);
+        int color = ColorUtils.blendARGB(ThemesRepo.getColor(R.attr.textColorOnAccent), ThemesRepo.getColor(android.R.attr.colorAccent), cloudProfile ? 0f : backgroundProgress);
         title.setTextColor(color);
         title.setTranslationY(ViewUtils.lerp(titleY, (ViewUtils.dp(52) - title.getHeight() * title.getScaleY()) / 2f, backgroundProgress));
     }
@@ -501,23 +480,13 @@ public class SetupActivity extends AppCompatActivity {
         Santoku.EVENT_BUS.unregisterListener(this);
     }
 
-    @EventHandler(runOnMainThread = true)
-    public void onDataUpdated(BeamServerDataUpdatedEvent e) {
-        if (!about && !boostyOnly && !cloudProfile) {
-            boolean wasBoosty = BOOSTY_INDEX != -1;
-            if (wasBoosty != BeamServerData.isBoostyAvailable()) {
-                setItems();
-            }
-        }
-    }
-
     @SuppressLint("NotifyDataSetChanged")
     @EventHandler(runOnMainThread = true)
     public void onCloudSyncFinished(CloudSyncFinishedEvent e) {
         if (cloudProfile && Prefs.getCloudAPIToken() != null && cloudImport) {
             finish();
         }
-        if (!about && !boostyOnly && !cloudProfile) {
+        if (!about && !cloudProfile) {
             if (Prefs.getCloudAPIToken() != null) {
                 limitRepoFragmentCount = false;
                 limitProfileFragmentCount = false;
@@ -531,13 +500,8 @@ public class SetupActivity extends AppCompatActivity {
     public void onCloudAuthStateUpdated(CloudLoginStateUpdatedEvent e) {
         if (cloudProfile) {
             cloudItem.bindLoginButton(true);
-            cloudItem.bindFeatures();
         }
-    }
-
-    @EventHandler(runOnMainThread = true)
-    public void onCloudFeaturesUpdated(CloudFeaturesUpdatedEvent e) {
-        if (!about && !boostyOnly && !cloudProfile) {
+        if (!about && !cloudProfile && reposItem != null) {
             reposItem.onCloudInfoUpdated();
         }
     }
@@ -545,8 +509,6 @@ public class SetupActivity extends AppCompatActivity {
     private void setItems() {
         if (cloudProfile){
             adapter.setItems(Collections.singletonList(cloudItem = new CloudProfileItem()));
-        } else if (boostyOnly) {
-            adapter.setItems(Collections.singletonList(new BoostyItem()));
         } else if (about) {
             adapter.setItems(Collections.singletonList(new AboutItem()));
         } else {
@@ -554,13 +516,6 @@ public class SetupActivity extends AppCompatActivity {
                     new IntroItem(),
                     reposItem = new ReposItem(),
                     profilesItem = new ProfilesItem()));
-
-            if (BeamServerData.isBoostyAvailable()) {
-                BOOSTY_INDEX = items.size();
-                items.add(new BoostyItem());
-            } else {
-                BOOSTY_INDEX = -1;
-            }
 
             items.add(new FinishItem());
             adapter.setItems(items);
@@ -685,7 +640,9 @@ public class SetupActivity extends AppCompatActivity {
         private FrameLayout buttonView;
         private TextView buttonText;
         private ProgressBar buttonProgress;
-        private FadeRecyclerView recyclerView;
+        private TextView titleView;
+        private TextView signUpButton;
+        private boolean signUpInProgress;
 
         @Override
         public View onCreateView(Context ctx) {
@@ -693,23 +650,16 @@ public class SetupActivity extends AppCompatActivity {
             ll.setOrientation(LinearLayout.VERTICAL);
             ll.setPadding(0, ViewUtils.dp(42), 0, 0);
 
-            TextView title = new TextView(ctx);
-            title.setTextColor(ThemesRepo.getColor(R.attr.textColorOnAccent));
-            title.setText(R.string.SettingsCloudManageDescription);
-            title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-            title.setGravity(Gravity.CENTER);
-            title.setPadding(ViewUtils.dp(12), 0, ViewUtils.dp(12), 0);
-            ll.addView(title);
+            titleView = new TextView(ctx);
+            titleView.setTextColor(ThemesRepo.getColor(R.attr.textColorOnAccent));
+            titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+            titleView.setGravity(Gravity.CENTER);
+            titleView.setPadding(ViewUtils.dp(12), 0, ViewUtils.dp(12), 0);
+            ll.addView(titleView);
+            bindHeader();
 
-            FrameLayout fl = new FrameLayout(ctx);
-            recyclerView = new FadeRecyclerView(ctx);
-            recyclerView.setBitmapMode();
-            recyclerView.setAdapter(adapter = new SimpleRecyclerAdapter());
-            recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-            fl.addView(recyclerView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
-            bindFeatures();
-
-            ll.addView(fl, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+            View spacer = new View(ctx);
+            ll.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
             TextView tosButton = new TextView(ctx);
             SpannableStringBuilder sb = SpannableStringBuilder.valueOf(ctx.getString(R.string.SettingsCloudManageTermsOfService)).append(" ");
@@ -724,7 +674,7 @@ public class SetupActivity extends AppCompatActivity {
             tosButton.setGravity(Gravity.CENTER);
             tosButton.setPadding(ViewUtils.dp(12), ViewUtils.dp(8), ViewUtils.dp(12), ViewUtils.dp(8));
             tosButton.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), 16));
-            tosButton.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://beam3d.ru/slicebeam_cloud_tos.html"))));
+            tosButton.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.BEAM_BASE_URL_PROD + "/tos"))));
             ll.addView(tosButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(52)) {{
                 leftMargin = rightMargin = ViewUtils.dp(16);
                 bottomMargin = ViewUtils.dp(8);
@@ -744,25 +694,28 @@ public class SetupActivity extends AppCompatActivity {
             buttonProgress.setIndeterminateTintList(ColorStateList.valueOf(ThemesRepo.getColor(R.attr.textColorOnAccent)));
             buttonView.addView(buttonProgress, new FrameLayout.LayoutParams(ViewUtils.dp(28), ViewUtils.dp(28), Gravity.CENTER));
 
-            bindLoginButton(false);
-
             ll.addView(buttonView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(52)) {{
                 leftMargin = rightMargin = ViewUtils.dp(16);
+            }});
+
+            signUpButton = new TextView(ctx);
+            signUpButton.setText(R.string.SettingsCloudManageButtonSignUp);
+            signUpButton.setTextColor(ThemesRepo.getColor(android.R.attr.colorAccent));
+            signUpButton.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
+            signUpButton.setGravity(Gravity.CENTER);
+            signUpButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+            signUpButton.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), 16));
+            signUpButton.setOnClickListener(v -> showSignUpDialog(v.getContext()));
+            ll.addView(signUpButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(52)) {{
+                leftMargin = rightMargin = ViewUtils.dp(16);
+                topMargin = ViewUtils.dp(8);
                 bottomMargin = ViewUtils.dp(16);
             }});
 
+            bindLoginButton(false);
+
             ll.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             return ll;
-        }
-
-        private void bindFeatures() {
-            List<SimpleRecyclerItem> items = new ArrayList<>();
-            if (CloudController.getUserFeatures() != null) {
-                for (CloudAPI.SubscriptionLevel lvl : CloudController.getUserFeatures().levels) {
-                    items.add(new CloudSubscriptionLevel(lvl));
-                }
-            }
-            adapter.setItems(items);
         }
 
         private void bindLoginButton(boolean animate) {
@@ -819,6 +772,7 @@ public class SetupActivity extends AppCompatActivity {
                 buttonText.setVisibility(loading ? View.GONE : View.VISIBLE);
             }
             buttonText.setText(loggedIn ? R.string.SettingsCloudManageButtonManage : R.string.SettingsCloudManageButtonLogIn);
+            bindHeader();
             buttonView.setOnClickListener(v-> {
                 if (loading) {
                     new BeamAlertDialogBuilder(v.getContext())
@@ -833,177 +787,145 @@ public class SetupActivity extends AppCompatActivity {
                     CloudController.beginLogin();
                 }
             });
-        }
-    }
 
-    private final static class CloudSubscriptionLevel extends SimpleRecyclerItem<CloudSubscriptionLevel.LevelHolderView> {
-        private CloudAPI.SubscriptionLevel level;
-
-        private CloudSubscriptionLevel(CloudAPI.SubscriptionLevel level) {
-            this.level = level;
-        }
-
-        @Override
-        public LevelHolderView onCreateView(Context ctx) {
-            return new LevelHolderView(ctx);
+            if (signUpButton != null) {
+                boolean showSignUp = !loggedIn && !loading;
+                signUpButton.setVisibility(showSignUp ? View.VISIBLE : View.GONE);
+                signUpButton.setEnabled(showSignUp && !signUpInProgress);
+                signUpButton.setAlpha(signUpButton.isEnabled() ? 1f : 0.6f);
+            }
         }
 
-        @Override
-        public void onBindView(LevelHolderView view) {
-            view.bind(this);
+        private void bindHeader() {
+            if (titleView == null) return;
+            CloudAPI.UserInfo info = CloudController.getUserInfo();
+            if (Prefs.getCloudAPIToken() != null && info != null && info.displayName != null) {
+                titleView.setText(titleView.getContext().getString(R.string.SettingsCloudManageLoggedInAs, info.displayName));
+            } else {
+                titleView.setText(R.string.SettingsCloudManageDescription);
+            }
         }
 
-        public final static class LevelHolderView extends LinearLayout implements IThemeView {
-            private ImageView icon;
-            private TextView title;
-            private TextView price;
-
-            private RecyclerView featuresLayout;
-            private SimpleRecyclerAdapter featuresAdapter;
-
-            public LevelHolderView(@NonNull Context context) {
-                super(context);
-
-                setOrientation(VERTICAL);
-                setPadding(0, ViewUtils.dp(16), 0, ViewUtils.dp(8));
-
-                LinearLayout inner = new LinearLayout(context);
-                inner.setOrientation(HORIZONTAL);
-                inner.setGravity(Gravity.CENTER_VERTICAL);
-                inner.setPadding(ViewUtils.dp(28), 0, ViewUtils.dp(28), 0);
-                addView(inner, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
-                    bottomMargin = ViewUtils.dp(8);
-                }});
-
-                icon = new ImageView(context);
-                inner.addView(icon, new LayoutParams(ViewUtils.dp(26), ViewUtils.dp(26)));
-
-                title = new TextView(context);
-                title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-                title.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
-                inner.addView(title, new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f) {{
-                    leftMargin = ViewUtils.dp(12);
-                }});
-
-                price = new TextView(context);
-                price.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-                price.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
-                inner.addView(price);
-
-                featuresLayout = new RecyclerView(context) {
-                    @Override
-                    public boolean dispatchTouchEvent(MotionEvent ev) {
-                        return false;
-                    }
-
-                    @Override
-                    protected boolean dispatchHoverEvent(MotionEvent event) {
-                        return false;
-                    }
-                };
-                featuresLayout.setLayoutManager(new LinearLayoutManager(context));
-                featuresLayout.setAdapter(featuresAdapter = new SimpleRecyclerAdapter());
-                addView(featuresLayout, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
-                    topMargin = ViewUtils.dp(3);
-                    leftMargin = rightMargin = ViewUtils.dp(16);
-                    bottomMargin = ViewUtils.dp(8);
-                }});
-
-                setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
-                    leftMargin = rightMargin = ViewUtils.dp(12);
-                    topMargin = ViewUtils.dp(12);
-                }});
-                onApplyTheme();
+        private void showSignUpDialog(Context ctx) {
+            if (signUpInProgress) {
+                return;
             }
 
-            public void bind(CloudSubscriptionLevel item) {
-                CloudAPI.SubscriptionLevel lvl = item.level;
-                title.setText(lvl.title);
-                price.setText(lvl.price);
-                if (lvl.level <= 0) {
-                    icon.setImageResource(R.drawable.zero_ruble_outline_28);
-                    price.setText(R.string.SettingsCloudManageFree);
-                } else if (lvl.level == 1) {
-                    icon.setImageResource(R.drawable.stars_outline_28);
+            LinearLayout ll = new LinearLayout(ctx);
+            ll.setOrientation(LinearLayout.VERTICAL);
+            ll.setPadding(ViewUtils.dp(16), ViewUtils.dp(8), ViewUtils.dp(16), 0);
+
+            TextView emailLabel = new TextView(ctx);
+            emailLabel.setText(R.string.SettingsCloudManageSignUpEmail);
+            emailLabel.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            emailLabel.setTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
+            ll.addView(emailLabel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            EditText emailInput = new EditText(ctx);
+            emailInput.setHint(R.string.SettingsCloudManageSignUpEmail);
+            emailInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+            emailInput.setTextColor(ThemesRepo.getColor(android.R.attr.textColorPrimary));
+            emailInput.setHintTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
+            ll.addView(emailInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            TextView displayNameLabel = new TextView(ctx);
+            displayNameLabel.setText(R.string.SettingsCloudManageSignUpDisplayName);
+            displayNameLabel.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            displayNameLabel.setTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
+            ll.addView(displayNameLabel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
+                topMargin = ViewUtils.dp(12);
+            }});
+
+            EditText displayNameInput = new EditText(ctx);
+            displayNameInput.setHint(R.string.SettingsCloudManageSignUpDisplayName);
+            displayNameInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PERSON_NAME);
+            displayNameInput.setTextColor(ThemesRepo.getColor(android.R.attr.textColorPrimary));
+            displayNameInput.setHintTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
+            ll.addView(displayNameInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
+                topMargin = ViewUtils.dp(8);
+            }});
+
+            TextView passwordLabel = new TextView(ctx);
+            passwordLabel.setText(R.string.SettingsCloudManageSignUpPassword);
+            passwordLabel.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            passwordLabel.setTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
+            ll.addView(passwordLabel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
+                topMargin = ViewUtils.dp(12);
+            }});
+
+            EditText passwordInput = new EditText(ctx);
+            passwordInput.setHint(R.string.SettingsCloudManageSignUpPassword);
+            passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            passwordInput.setTextColor(ThemesRepo.getColor(android.R.attr.textColorPrimary));
+            passwordInput.setHintTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
+            ll.addView(passwordInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
+                topMargin = ViewUtils.dp(8);
+            }});
+
+            CheckBox showPassword = new CheckBox(ctx);
+            showPassword.setText(R.string.SettingsCloudManageSignUpShowPassword);
+            showPassword.setTextColor(ThemesRepo.getColor(android.R.attr.textColorPrimary));
+            showPassword.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                int selection = passwordInput.getSelectionEnd();
+                if (isChecked) {
+                    passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
                 } else {
-                    icon.setImageResource(R.drawable.cloud_plus_outline_28);
+                    passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
                 }
+                passwordInput.setSelection(Math.max(selection, 0));
+            });
+            ll.addView(showPassword, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) {{
+                topMargin = ViewUtils.dp(4);
+            }});
 
-                List<SimpleRecyclerItem> items = new ArrayList<>();
-                CloudAPI.UserFeatures features = CloudController.getUserFeatures();
-                CloudAPI.UserInfo info = CloudController.getUserInfo();
-                Context ctx = getContext();
-                if (!BuildConfig.IS_GOOGLE_PLAY && features.earlyAccessLevel != -1 && lvl.level >= features.earlyAccessLevel) {
-                    items.add(new PreferenceItem()
-                            .setForceDark(true)
-                            .setPaddings(ViewUtils.dp(8))
-                            .setIcon(R.drawable.clock_circle_dashed_outline_24)
-                            .setTitle(ctx.getString(R.string.SettingsCloudManageFeatureEarlyAccess))
-                            .setSubtitle(ctx.getString(R.string.SettingsCloudManageFeatureEarlyAccessDescription)));
-                }
-                if (features.syncRequiredLevel != -1 && lvl.level >= features.syncRequiredLevel) {
-                    items.add(new PreferenceItem()
-                            .setForceDark(true)
-                            .setPaddings(ViewUtils.dp(8))
-                            .setIcon(R.drawable.sync_outline_28)
-                            .setTitle(ctx.getString(R.string.SettingsCloudManageFeatureCloudSync))
-                            .setSubtitle(ctx.getString(R.string.SettingsCloudManageFeatureCloudSyncDescription)));
-                }
-                if (features.aiGeneratorRequiredLevel != -1 && lvl.level >= features.aiGeneratorRequiredLevel) {
-                    items.add(new PreferenceItem()
-                            .setForceDark(true)
-                            .setPaddings(ViewUtils.dp(8))
-                            .setIcon(R.drawable.brain_outline_28)
-                            .setTitle(ctx.getString(R.string.SettingsCloudManageFeatureAIGenerator))
-                            .setSubtitle(ctx.getString(R.string.SettingsCloudManageFeatureAIGeneratorDescription, features.aiGeneratorModelsPerMonth)));
-                }
-                if (lvl.level > 0) {
-                    items.add(new PreferenceItem()
-                            .setForceDark(true)
-                            .setPaddings(ViewUtils.dp(8))
-                            .setIcon(R.drawable.box_heart_outline_28)
-                            .setTitle(ctx.getString(R.string.SettingsCloudManageFeatureFreeForAll))
-                            .setSubtitle(ctx.getString(R.string.SettingsCloudManageFeatureFreeForAllDescription)));
-                }
-                featuresAdapter.setItems(items);
-                featuresLayout.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
+            TextView dialogTitle = new TextView(ctx);
+            dialogTitle.setText(R.string.SettingsCloudManageButtonSignUp);
+            dialogTitle.setTextColor(ThemesRepo.getColor(android.R.attr.textColorPrimary));
+            dialogTitle.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 28);
+            dialogTitle.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
+            dialogTitle.setGravity(Gravity.CENTER);
+            dialogTitle.setPadding(0, ViewUtils.dp(4), 0, ViewUtils.dp(8));
+            ll.addView(dialogTitle, 0, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-                boolean subscribed = lvl.level > 0 && info != null && lvl.level == info.currentLevel;
-                boolean allowSubscribe = lvl.level > 0 && (info == null || lvl.level > info.currentLevel);
-                if (subscribed) {
-                    price.setText(R.string.SettingsCloudManageSubscribed);
-                }
-                price.setVisibility(allowSubscribe || subscribed ? View.VISIBLE : View.GONE);
-                setOnClickListener(v -> {
-                    if (subscribed) {
-                        v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(lvl.manageUrl)));
-                    } else {
-                        new BeamAlertDialogBuilder(getContext())
-                                .setTitle(lvl.title)
-                                .setMessage(R.string.SettingsCloudManageLevelRedirectMessage)
-                                .setPositiveButton(android.R.string.ok, (dialog, which) -> v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(lvl.subscribeOrUpgradeUrl))))
-                                .setNegativeButton(R.string.SettingsCloudManageLevelRedirectAlreadySubscribed, (dialog, which) -> v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(features.alreadySubscribedInfoUrl))))
-                                .show();
-                    }
-                });
-                setClickable(allowSubscribe || subscribed);
-                onApplyTheme();
-            }
+            new BeamAlertDialogBuilder(ctx)
+                    .setView(ll)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.SettingsCloudManageButtonSignUp, (dialog, which) -> {
+                        String email = emailInput.getText().toString().trim();
+                        String displayName = displayNameInput.getText().toString().trim();
+                        String password = passwordInput.getText().toString();
+                        if (TextUtils.isEmpty(email) || TextUtils.isEmpty(displayName) || TextUtils.isEmpty(password)) {
+                            Toast.makeText(ctx, R.string.SettingsCloudManageSignUpMissingFields, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        signUpInProgress = true;
+                        bindLoginButton(true);
+                        CloudAPI.INSTANCE.signup(email, password, displayName, new APICallback<CloudAPI.AuthToken>() {
+                            @Override
+                            public void onResponse(CloudAPI.AuthToken response) {
+                                Prefs.setCloudAPIToken(response.bearer);
+                                signUpInProgress = false;
+                                CloudController.init();
+                                Santoku.EVENT_BUS.fireEvent(new CloudLoginStateUpdatedEvent());
+                            }
 
-            @Override
-            public void onApplyTheme() {
-                int accent = ThemesRepo.getColor(android.R.attr.colorAccent);
-                if (ColorUtils.calculateLuminance(accent) >= 0.6f) {
-                    accent = ColorUtils.blendARGB(accent, Color.BLACK, 0.075f);
-                }
-                boolean tooLight = ColorUtils.calculateLuminance(accent) >= 0.6f;
-                title.setTextColor(0xffffffff);
-                price.setTextColor(0xffffffff);
-                icon.setImageTintList(ColorStateList.valueOf(0xffffffff));
-                featuresLayout.setBackground(ViewUtils.createRipple(0, tooLight ? 0x33ffffff : 0x21ffffff, 24));
-                setBackground(ViewUtils.createRipple(0x21000000, ColorUtils.blendARGB(0xffffffff, accent, tooLight ? 0.9f : 0.75f), 32));
-            }
+                            @Override
+                            public void onException(Exception e) {
+                                signUpInProgress = false;
+                                ViewUtils.postOnMainThread(() -> {
+                                    new BeamAlertDialogBuilder(ctx)
+                                            .setTitle(R.string.SettingsCloudManageSignUpFailed)
+                                            .setMessage(e.toString())
+                                            .setPositiveButton(android.R.string.ok, null)
+                                            .show();
+                                    bindLoginButton(true);
+                                });
+                            }
+                        });
+                    })
+                    .show();
         }
+
     }
 
     private final class AboutItem extends SimpleRecyclerItem<View> {
@@ -1235,9 +1157,9 @@ public class SetupActivity extends AppCompatActivity {
             progressBar.setIndeterminateTintList(ColorStateList.valueOf(ThemesRepo.getColor(android.R.attr.colorAccent)));
             cloudImportView.setTextColor(ThemesRepo.getColor(android.R.attr.colorAccent));
             cloudImportView.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), 16));
-            cloudImportView.setVisibility(BeamServerData.isCloudAvailable() ? View.VISIBLE : View.GONE);
+            cloudImportView.setVisibility(Prefs.getCloudAPIToken() != null ? View.VISIBLE : View.GONE);
             cloudOrView.setTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
-            cloudOrView.setVisibility(BeamServerData.isCloudAvailable() ? View.VISIBLE : View.GONE);
+            cloudOrView.setVisibility(Prefs.getCloudAPIToken() != null ? View.VISIBLE : View.GONE);
             customProfileView.setTextColor(ThemesRepo.getColor(android.R.attr.colorAccent));
             customProfileView.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), 16));
             buttonView.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), ThemesRepo.getColor(android.R.attr.colorAccent), 16));
@@ -1264,8 +1186,8 @@ public class SetupActivity extends AppCompatActivity {
 
         public void onCloudInfoUpdated() {
             if (cloudImportView != null) {
-                cloudImportView.setVisibility(BeamServerData.isCloudAvailable() ? View.VISIBLE : View.GONE);
-                cloudOrView.setVisibility(BeamServerData.isCloudAvailable() ? View.VISIBLE : View.GONE);
+                cloudImportView.setVisibility(Prefs.getCloudAPIToken() != null ? View.VISIBLE : View.GONE);
+                cloudOrView.setVisibility(Prefs.getCloudAPIToken() != null ? View.VISIBLE : View.GONE);
             }
         }
 
@@ -1422,80 +1344,6 @@ public class SetupActivity extends AppCompatActivity {
                     })
                     .addEndListener((animation, canceled, value, velocity) -> progressBar.setVisibility(View.GONE))
                     .start();
-        }
-    }
-
-    private final class BoostyItem extends SimpleRecyclerItem<View> {
-
-        @Override
-        public View onCreateView(Context ctx) {
-            LinearLayout ll = new LinearLayout(ctx);
-            ll.setOrientation(LinearLayout.VERTICAL);
-            ll.setPadding(0, ViewUtils.dp(42), 0, 0);
-
-            TextView title = new TextView(ctx);
-            title.setTextColor(ThemesRepo.getColor(R.attr.textColorOnAccent));
-            title.setText(R.string.IntroBoostyTitle);
-            title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-            title.setGravity(Gravity.CENTER);
-            title.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
-            title.setPadding(ViewUtils.dp(12), 0, ViewUtils.dp(12), 0);
-            ll.addView(title);
-
-            BoostySubsView subsView = new BoostySubsView(ctx);
-            if (Santoku.SERVER_DATA != null) {
-                List<String> list = new ArrayList<>(Santoku.SERVER_DATA.boostySubscribers);
-                Collections.shuffle(list);
-                subsView.setStrings(list);
-            }
-            ll.addView(subsView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f) {{
-                bottomMargin = ViewUtils.dp(64);
-            }});
-
-            TextView subscribeButton = new TextView(ctx);
-            SpannableStringBuilder sb = SpannableStringBuilder.valueOf(ctx.getString(R.string.IntroBoostySupport)).append(" ");
-            Drawable dr = ContextCompat.getDrawable(ctx, R.drawable.external_link_outline_24);
-            int size = ViewUtils.dp(16);
-            dr.setBounds(0, 0, size, size);
-            sb.append("d", new TextColorImageSpan(dr, ViewUtils.dp(2f)), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
-            subscribeButton.setText(sb);
-            subscribeButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-            subscribeButton.setTextColor(Color.WHITE);
-            subscribeButton.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
-            subscribeButton.setGravity(Gravity.CENTER);
-            subscribeButton.setPadding(ViewUtils.dp(12), ViewUtils.dp(8), ViewUtils.dp(12), ViewUtils.dp(8));
-            subscribeButton.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), 16));
-            subscribeButton.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://boosty.to/ytkab0bp"))));
-            ll.addView(subscribeButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(52)) {{
-                leftMargin = rightMargin = ViewUtils.dp(16);
-                bottomMargin = ViewUtils.dp(8);
-            }});
-
-            TextView buttonView = new TextView(ctx);
-            if (boostyOnly) {
-                buttonView.setText(android.R.string.ok);
-            } else {
-                buttonView.setText(R.string.IntroNext);
-            }
-            buttonView.setTextColor(ThemesRepo.getColor(R.attr.textColorOnAccent));
-            buttonView.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
-            buttonView.setGravity(Gravity.CENTER);
-            buttonView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-            buttonView.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), ThemesRepo.getColor(R.attr.boostyColorTop), 16));
-            buttonView.setOnClickListener(v-> {
-                if (boostyOnly) {
-                    finish();
-                    return;
-                }
-                scrollToNext();
-            });
-            ll.addView(buttonView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(52)) {{
-                leftMargin = rightMargin = ViewUtils.dp(16);
-                bottomMargin = ViewUtils.dp(16);
-            }});
-
-            ll.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            return ll;
         }
     }
 

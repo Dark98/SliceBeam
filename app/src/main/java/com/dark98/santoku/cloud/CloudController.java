@@ -21,9 +21,7 @@ import ru.ytkab0bp.sapil.APIRequestHandle;
 import com.dark98.santoku.R;
 import com.dark98.santoku.Santoku;
 import com.dark98.santoku.components.BeamAlertDialogBuilder;
-import com.dark98.santoku.events.CloudFeaturesUpdatedEvent;
 import com.dark98.santoku.events.CloudLoginStateUpdatedEvent;
-import com.dark98.santoku.events.CloudModelsRemainingCountUpdatedEvent;
 import com.dark98.santoku.events.CloudSyncFinishedEvent;
 import com.dark98.santoku.events.CloudUserInfoUpdatedEvent;
 import com.dark98.santoku.events.NeedDismissSnackbarEvent;
@@ -35,19 +33,13 @@ import com.dark98.santoku.utils.ViewUtils;
 import com.dark98.santoku.view.SnackbarsLayout;
 
 public class CloudController {
-    public final static String USER_INFO_AI_GEN_TAG = "ai_gen_user_info";
     public final static String CLOUD_SYNC_TAG = "cloud_sync";
 
     private final static String TAG = "cloud";
     private final static long MIN_SYNC_DELTA = 5 * 60 * 1000L; // Once in 5 minutes
-    private final static long MIN_SYNC_FEATURES_DELTA = 12 * 60 * 60 * 1000L; // Once in 12 hours
-
     private static boolean isSyncInProgress;
     private static CloudAPI.UserInfo userInfo;
-    private static CloudAPI.UserFeatures userFeatures;
 
-    private static int modelsUsed;
-    private static int modelsMaxGenerations;
     private static boolean isLoggingIn;
     private static APIRequestHandle beginLoginHandle;
     private static String loginSessionId;
@@ -86,31 +78,21 @@ public class CloudController {
     private static Gson gson = new Gson();
 
     public static void initCached() {
-        if (Prefs.getCloudCachedUserFeatures() != null) {
-            userFeatures = gson.fromJson(Prefs.getCloudCachedUserFeatures(), CloudAPI.UserFeatures.class);
-        }
         if (Prefs.getCloudAPIToken() != null) {
             if (Prefs.getCloudCachedUserInfo() != null) {
                 userInfo = gson.fromJson(Prefs.getCloudCachedUserInfo(), CloudAPI.UserInfo.class);
-                modelsUsed = Prefs.getCloudCachedUsedModels();
-                modelsMaxGenerations = Prefs.getCloudCachedMaxModels();
             }
         }
     }
 
     public static void init() {
-        long now = Santoku.TRUE_TIME.now().getTime();
-        boolean needSyncInfo = userFeatures == null || now - Prefs.getCloudLastFeaturesSync() > MIN_SYNC_FEATURES_DELTA;
-        if (needSyncInfo) {
-            checkUserFeatures();
-        }
-
         if (Prefs.getCloudAPIToken() != null) {
-            if (needSyncInfo || userInfo == null) {
+            long now = Santoku.TRUE_TIME.now().getTime();
+            if (userInfo == null) {
                 loadUserInfo();
             }
 
-            if (!needSyncInfo && userInfo != null && isSyncAvailable() && Prefs.isCloudProfileSyncEnabled()) {
+            if (userInfo != null && isSyncAvailable() && Prefs.isCloudProfileSyncEnabled()) {
                 if (now - Prefs.getCloudLastSync() > MIN_SYNC_DELTA) {
                     syncData();
                 }
@@ -137,7 +119,6 @@ public class CloudController {
                 } else {
                     Prefs.setCloudCachedUserInfo(gson.toJson(userInfo));
 
-                    Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(USER_INFO_AI_GEN_TAG));
                     Santoku.EVENT_BUS.fireEvent(new CloudUserInfoUpdatedEvent());
 
                     if (isLoggingIn) {
@@ -148,9 +129,7 @@ public class CloudController {
                     if (isSyncAvailable() && Prefs.isCloudProfileSyncEnabled()) {
                         syncData();
                     }
-                    checkGeneratorRemaining();
                 }
-                Prefs.setCloudLastFeaturesSync(Santoku.TRUE_TIME.now().getTime());
             }
 
             @Override
@@ -205,77 +184,23 @@ public class CloudController {
     }
 
     public static void logout() {
+        CloudAPI.INSTANCE.logout(response -> {});
         Prefs.setCloudAPIToken(null);
         userInfo = null;
         Santoku.EVENT_BUS.fireEvent(new CloudLoginStateUpdatedEvent());
         Santoku.EVENT_BUS.fireEvent(new CloudUserInfoUpdatedEvent());
-        CloudAPI.INSTANCE.logout(response -> {});
-    }
-
-    public static void checkGeneratorRemaining() {
-        CloudAPI.INSTANCE.modelsGetRemainingCount(new APICallback<CloudAPI.ModelsRemainingCount>() {
-            @Override
-            public void onResponse(CloudAPI.ModelsRemainingCount response) {
-                modelsUsed = response.used;
-                modelsMaxGenerations = response.max;
-                Prefs.setCloudCachedUsedMaxModels(modelsUsed, modelsMaxGenerations);
-                Santoku.EVENT_BUS.fireEvent(new CloudModelsRemainingCountUpdatedEvent());
-            }
-
-            @Override
-            public void onException(Exception e) {
-                Log.e(TAG, "Failed to check remaining models", e);
-                ViewUtils.postOnMainThread(CloudController::checkGeneratorRemaining, 15000);
-            }
-        });
-    }
-
-    public static void checkUserFeatures() {
-        CloudAPI.INSTANCE.userGetFeatures(new APICallback<CloudAPI.UserFeatures>() {
-            @Override
-            public void onResponse(CloudAPI.UserFeatures response) {
-                userFeatures = response;
-                Prefs.setCloudCachedUserFeatures(gson.toJson(userFeatures));
-                if (Prefs.getCloudAPIToken() == null) {
-                    Prefs.setCloudLastFeaturesSync(Santoku.TRUE_TIME.now().getTime());
-                }
-                Santoku.EVENT_BUS.fireEvent(new CloudFeaturesUpdatedEvent());
-            }
-
-            @Override
-            public void onException(Exception e) {
-                Log.e(TAG, "Failed to get user features", e);
-                ViewUtils.postOnMainThread(CloudController::checkUserFeatures, 15000);
-            }
-        });
     }
 
     public static CloudAPI.UserInfo getUserInfo() {
         return userInfo;
     }
 
-    public static CloudAPI.UserFeatures getUserFeatures() {
-        return userFeatures;
-    }
-
     public static boolean hasAccountFeatures() {
-        return userFeatures != null && userFeatures.levels != null && !userFeatures.levels.isEmpty();
+        return true;
     }
 
     public static boolean isSyncAvailable() {
-        return Prefs.getCloudAPIToken() != null && userInfo != null && userFeatures != null && userInfo.currentLevel >= userFeatures.syncRequiredLevel;
-    }
-
-    public static boolean needShowAIGenerator() {
-        return userFeatures != null && userFeatures.aiGeneratorRequiredLevel >= 0;
-    }
-
-    public static int getGeneratedModels() {
-        return modelsUsed;
-    }
-
-    public static int getMaxGeneratedModels() {
-        return modelsMaxGenerations;
+        return Prefs.getCloudAPIToken() != null && userInfo != null;
     }
 
     private static void downloadData(long lastModified) {

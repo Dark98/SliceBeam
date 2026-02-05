@@ -20,3 +20,134 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+def loadLocalProperties() {
+    def props = new Properties()
+    def propsFile = rootProject.file("local.properties")
+    if (propsFile.exists()) {
+        propsFile.withInputStream { props.load(it) }
+    }
+    return props
+}
+
+def resolveSdkDir() {
+    def props = loadLocalProperties()
+    return props.getProperty("sdk.dir") ?: System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+}
+
+def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+def npmCmd = isWindows ? "npm.cmd" : "npm"
+
+def findWindowsNpm() {
+    def candidates = []
+    def pathEnv = System.getenv("PATH") ?: ""
+    pathEnv.split(";").each { p ->
+        if (!p) return
+        def cmd = new File(p, "npm.cmd")
+        if (cmd.exists()) candidates << cmd
+        def exe = new File(p, "npm.exe")
+        if (exe.exists()) candidates << exe
+    }
+    def nvmHome = System.getenv("NVM_HOME")
+    def nvmSymlink = System.getenv("NVM_SYMLINK")
+    if (nvmSymlink) {
+        def cmd = new File(nvmSymlink, "npm.cmd")
+        if (cmd.exists()) candidates << cmd
+    }
+    if (nvmHome) {
+        def current = new File(nvmHome, "current")
+        if (current.exists()) {
+            def cmd = new File(current, "npm.cmd")
+            if (cmd.exists()) candidates << cmd
+        }
+        def versions = new File(nvmHome)
+        if (versions.exists()) {
+            versions.listFiles()?.findAll { it.isDirectory() }?.each { v ->
+                def cmd = new File(v, "npm.cmd")
+                if (cmd.exists()) candidates << cmd
+            }
+        }
+    }
+    def appData = System.getenv("APPDATA")
+    if (appData) {
+        def cmd = new File(appData, "npm\\npm.cmd")
+        if (cmd.exists()) candidates << cmd
+    }
+    def programFiles = System.getenv("ProgramFiles")
+    if (programFiles) {
+        def cmd = new File(programFiles, "nodejs\\npm.cmd")
+        if (cmd.exists()) candidates << cmd
+    }
+    def localAppData = System.getenv("LOCALAPPDATA")
+    if (localAppData) {
+        def nvmLocal = new File(localAppData, "nvm")
+        if (nvmLocal.exists()) {
+            nvmLocal.listFiles()?.findAll { it.isDirectory() }?.each { v ->
+                def cmd = new File(v, "npm.cmd")
+                if (cmd.exists()) candidates << cmd
+            }
+        }
+    }
+    return candidates.isEmpty() ? null : candidates.first().absolutePath
+}
+
+tasks.register("startBackend", Exec) {
+    workingDir "${rootDir}/backend"
+    if (isWindows) {
+        doFirst {
+            def npmPath = (project.findProperty("npmPath") ?: System.getenv("NPM_PATH"))?.toString()
+            if (!npmPath) {
+                npmPath = findWindowsNpm()
+            }
+            if (!npmPath) {
+                def out = new ByteArrayOutputStream()
+                exec {
+                    commandLine "cmd", "/c", "where.exe", "npm"
+                    standardOutput = out
+                    errorOutput = out
+                    ignoreExitValue = true
+                }
+                def line = out.toString().readLines().find { it.toLowerCase().endsWith("npm.cmd") || it.toLowerCase().endsWith("npm.exe") }
+                if (line) {
+                    npmPath = line.trim()
+                }
+            }
+            if (!npmPath) {
+                throw new GradleException("npm not found. Set -PnpmPath=... or ensure npm is visible to cmd.exe. If using nvm, try your NVM_HOME version's npm.cmd.")
+            }
+            def nodeModules = new File(workingDir, "node_modules")
+            if (!nodeModules.exists()) {
+                exec {
+                    workingDir "${rootDir}/backend"
+                    commandLine "cmd", "/c", npmPath, "install"
+                }
+            }
+            commandLine "cmd", "/c", "start", "\"\"", npmPath, "start"
+        }
+    } else {
+        doFirst {
+            def nodeModules = new File(workingDir, "node_modules")
+            if (!nodeModules.exists()) {
+                exec {
+                    workingDir "${rootDir}/backend"
+                    commandLine "sh", "-c", "${npmCmd} install"
+                }
+            }
+            commandLine "sh", "-c", "${npmCmd} start &"
+        }
+    }
+}
+
+tasks.register("runBackendDebug") {
+    dependsOn(":app:installDebug", "startBackend")
+    doLast {
+        def sdkDir = resolveSdkDir()
+        if (!sdkDir) {
+            throw new GradleException("Missing sdk.dir in local.properties and ANDROID_SDK_ROOT/ANDROID_HOME is not set")
+        }
+        def adb = "${sdkDir}/platform-tools/adb" + (isWindows ? ".exe" : "")
+        exec {
+            commandLine adb, "shell", "am", "start", "-n", "com.dark98.santoku/.MainActivity"
+        }
+    }
+}

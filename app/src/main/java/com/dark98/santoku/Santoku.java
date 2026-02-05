@@ -18,7 +18,6 @@ import java.util.Map;
 
 import ru.ytkab0bp.eventbus.EventBus;
 import com.dark98.santoku.boot.AppBoot;
-import com.dark98.santoku.boot.BeamServerDataTask;
 import com.dark98.santoku.boot.CheckUpdateJsonTask;
 import com.dark98.santoku.boot.ClearModelCacheTask;
 import com.dark98.santoku.boot.CloudInitTask;
@@ -41,7 +40,6 @@ public class Santoku extends Application {
     public static TrueTimeImpl TRUE_TIME;
     public static Slic3rConfigWrapper CONFIG;
     public static int CONFIG_UID = 0;
-    public static BeamServerData SERVER_DATA;
     public static boolean hasUpdateInfo;
 
     @SuppressLint("ApplySharedPref")
@@ -54,7 +52,6 @@ public class Santoku extends Application {
                 new PrefsTask(),
                 new VibrationUtilsTask(),
                 new TrueTimeTask(),
-                new BeamServerDataTask(),
                 new PrintConfigWarmupTask(),
                 new CheckUpdateJsonTask(),
                 new ClearModelCacheTask(),

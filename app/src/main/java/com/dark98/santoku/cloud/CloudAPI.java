@@ -2,12 +2,7 @@ package com.dark98.santoku.cloud;
 
 import androidx.annotation.Nullable;
 
-import com.google.gson.Gson;
-
-import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import ru.ytkab0bp.sapil.APICallback;
@@ -27,7 +22,7 @@ public interface CloudAPI extends APIRunner {
 
         @Override
         public String getBaseURL() {
-            return "https://api.beam3d.ru/v1/";
+            return BuildConfig.CLOUD_BASE_URL_PROD;
         }
 
         @Override
@@ -72,10 +67,16 @@ public interface CloudAPI extends APIRunner {
     void userGetInfo(APICallback<UserInfo> callback);
 
     /**
-     * Gets user features
+     * Creates a new account (email/password)
      */
-    @Method("user/getFeatures")
-    void userGetFeatures(APICallback<UserFeatures> callback);
+    @Method(requestType = RequestType.POST, value = "signup")
+    void signup(@Arg("email") String email, @Arg("password") String password, @Arg("displayName") String displayName, APICallback<AuthToken> callback);
+
+    /**
+     * Login with email/password
+     */
+    @Method(requestType = RequestType.POST, value = "login")
+    void login(@Arg("email") String email, @Arg("password") String password, APICallback<AuthToken> callback);
 
     /**
      * Fetches sync state
@@ -102,24 +103,6 @@ public interface CloudAPI extends APIRunner {
      */
     @Method("sync/get")
     void syncGet(APICallback<String> callback);
-
-    /**
-     * Generates 3D model from image
-     * <p>
-     * @param image Base64 encoded image
-     * <p>
-     * Requires authorization
-     */
-    @Method(requestType = RequestType.POST, value = "models/generate")
-    void modelsGenerate(@Arg("") String image, @Header("Content-Type") String type, APICallback<InputStream> callback);
-
-    /**
-     * Gets remaining model generations count
-     * <p>
-     * Requires authorization
-     */
-    @Method("models/getRemainingCount")
-    void modelsGetRemainingCount(APICallback<ModelsRemainingCount> callback);
 
     /**
      * Destroys token
@@ -158,65 +141,12 @@ public interface CloudAPI extends APIRunner {
         public String bearer;
     }
 
-    final class UserFeatures {
+    final class AuthToken {
         /**
-         * Which level is required for early access
+         * Bearer token
          */
-        public int earlyAccessLevel;
-
-        /**
-         * Which level is required for data sync
-         */
-        public int syncRequiredLevel;
-
-        /**
-         * Which level is required for AI model generator
-         */
-        public int aiGeneratorRequiredLevel;
-
-        /**
-         * Models per month max
-         */
-        public int aiGeneratorModelsPerMonth;
-
-        /**
-         * Url at which user should be redirected for info about how to restore a subscription
-         */
-        public String alreadySubscribedInfoUrl;
-
-        /**
-         * List of subscription levels
-         */
-        public List<SubscriptionLevel> levels = new ArrayList<>();
+        public String bearer;
     }
-
-    final class SubscriptionLevel {
-        /**
-         * Int representation
-         */
-        public int level;
-
-        /**
-         * Title of this level
-         */
-        public String title;
-
-        /**
-         * Price of this level
-         */
-        public String price;
-
-        /**
-         * Url at which user should be redirected for purchase
-         */
-        public String subscribeOrUpgradeUrl;
-
-        /**
-         * Url at which user should be redirected for managing the subscription
-         */
-        public String manageUrl;
-    }
-
 
     final class UserInfo {
         /**
@@ -235,10 +165,6 @@ public interface CloudAPI extends APIRunner {
         @Nullable
         public String avatarUrl;
 
-        /**
-         * Current subscription level
-         */
-        public int currentLevel;
     }
 
 
@@ -259,15 +185,4 @@ public interface CloudAPI extends APIRunner {
         public long maxSize;
     }
 
-    final class ModelsRemainingCount {
-        /**
-         * Used generations
-         */
-        public int used;
-
-        /**
-         * Max available generations
-         */
-        public int max;
-    }
 }

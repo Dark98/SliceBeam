@@ -47,31 +47,6 @@ public class Prefs {
         mPrefs.edit().putBoolean("scale_linked", v).apply();
     }
 
-    public static long getLastCheckedInfo() {
-        return mPrefs.getLong("last_checked_info", 0);
-    }
-
-    public static void setLastCheckedInfo() {
-        mPrefs.edit().putLong("last_checked_info", System.currentTimeMillis()).apply();
-    }
-
-    // Only used for displaying Boosty info, nothing more
-    public static boolean isRussianIP() {
-        return mPrefs.getBoolean("russian_ip", false);
-    }
-
-    public static void setRussianIP(boolean v) {
-        mPrefs.edit().putBoolean("russian_ip", v).apply();
-    }
-
-    public static void setBeamServerData(String data) {
-        mPrefs.edit().putString("beam_server_data", data).apply();
-    }
-
-    public static String getBeamServerData() {
-        return mPrefs.getString("beam_server_data", "{}");
-    }
-
     public static int getCameraControlMode() {
         return mPrefs.getInt("camera_control_mode", mPrefs.getBoolean("rotation_enabled", true) ? CAMERA_CONTROL_MODE_ROTATE_MOVE : CAMERA_CONTROL_MODE_MOVE_ONLY);
     }
@@ -159,40 +134,6 @@ public class Prefs {
             e.putString("cloud_cached_user_info", info);
         }
         e.apply();
-    }
-
-    public static int getCloudCachedUsedModels() {
-        return mPrefs.getInt("cloud_cached_models_used", 0);
-    }
-
-    public static int getCloudCachedMaxModels() {
-        return mPrefs.getInt("cloud_cached_models_max", 50);
-    }
-
-    public static void setCloudCachedUsedMaxModels(int used, int max) {
-        mPrefs.edit().putInt("cloud_cached_models_used", used).putInt("cloud_cached_models_max", max).apply();
-    }
-
-    public static String getCloudCachedUserFeatures() {
-        return mPrefs.getString("cloud_cached_user_features", null);
-    }
-
-    public static void setCloudCachedUserFeatures(String features) {
-        SharedPreferences.Editor e = mPrefs.edit();
-        if (features == null) {
-            e.remove("cloud_cached_user_features");
-        } else {
-            e.putString("cloud_cached_user_features", features);
-        }
-        e.apply();
-    }
-
-    public static long getCloudLastFeaturesSync() {
-        return mPrefs.getLong("cloud_last_features_sync", 0);
-    }
-
-    public static void setCloudLastFeaturesSync(long ls) {
-        mPrefs.edit().putLong("cloud_last_features_sync", ls).apply();
     }
 
     public static long getCloudLastSync() {

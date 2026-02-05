@@ -20,10 +20,6 @@ public class BeamTheme {
         colors.put(R.attr.dividerContrastColor, 0xffcccccc);
         colors.put(R.attr.dialogBackground, 0xffffffff);
         colors.put(R.attr.switchThumbUncheckedColor, 0xffeef2f3);
-        colors.put(R.attr.boostyColorTop, 0xfff06e2a);
-        colors.put(R.attr.boostyColorBottom, 0xff884725);
-        colors.put(R.attr.telegramColor, 0xff27a7e7);
-        colors.put(R.attr.k3dColor, 0xff039045);
         colors.put(R.attr.modelHoverColor, 0xffffffff);
         colors.put(R.attr.textColorNegative, 0xffff464a);
 
@@ -73,7 +69,6 @@ public class BeamTheme {
         colors.put(R.attr.bedContourlinesColor, 0x40ffffff);
         colors.put(R.attr.backgroundColorTop, 0xff292929);
         colors.put(R.attr.backgroundColorBottom, 0xff181818);
-        colors.put(R.attr.boostyColorBottom, 0xff884725);
 
         colors.put(R.attr.xTrackColor, 0xffee0000);
         colors.put(R.attr.yTrackColor, 0xff00ee00);

@@ -20,15 +20,14 @@ import java.util.Collections;
 import java.util.List;
 
 import ru.ytkab0bp.eventbus.EventHandler;
-import com.dark98.santoku.BeamServerData;
 import com.dark98.santoku.R;
 import com.dark98.santoku.SetupActivity;
 import com.dark98.santoku.Santoku;
 import com.dark98.santoku.components.BeamAlertDialogBuilder;
 import com.dark98.santoku.components.BeamColorPickerPopUp;
 import com.dark98.santoku.config.ConfigObject;
-import com.dark98.santoku.events.BeamServerDataUpdatedEvent;
 import com.dark98.santoku.events.CloudUserInfoUpdatedEvent;
+import com.dark98.santoku.cloud.CloudController;
 import com.dark98.santoku.recycler.PreferenceItem;
 import com.dark98.santoku.theme.BeamTheme;
 import com.dark98.santoku.theme.ThemesRepo;
@@ -46,7 +45,7 @@ public class SettingsFragment extends ProfileListFragment {
     @Override
     protected List<OptionElement> getConfigItems() {
         return Arrays.asList(
-                BeamServerData.isCloudAvailable() ? new OptionElement(SPECIAL_TYPE_CLOUD_HEADER).setOnClick(() -> {
+                CloudController.hasAccountFeatures() ? new OptionElement(SPECIAL_TYPE_CLOUD_HEADER).setOnClick(() -> {
                     Activity act = (Activity) getContext();
                     act.startActivity(new Intent(act, SetupActivity.class).putExtra(SetupActivity.EXTRA_CLOUD_PROFILE, true));
                 }) : null,
@@ -112,7 +111,7 @@ public class SettingsFragment extends ProfileListFragment {
                                     BeamTheme.LIGHT.colors.put(android.R.attr.colorAccent, Prefs.getAccentColor());
                                     BeamTheme.DARK.colors.put(android.R.attr.colorAccent, Prefs.getAccentColor());
                                     ThemesRepo.invalidate((Activity) getContext());
-                                    recyclerView.getAdapter().notifyItemChanged(2 - (BeamServerData.isCloudAvailable() ? 0 : 1));
+                                    recyclerView.getAdapter().notifyItemChanged(2 - (CloudController.hasAccountFeatures() ? 0 : 1));
                                 }
                             })
                             .setNegativeButtonText(getContext().getString(R.string.SettingsInterfaceColorReset))
@@ -135,25 +134,13 @@ public class SettingsFragment extends ProfileListFragment {
                                 Prefs.setRenderScale(variants[which]);
                                 dialog.dismiss();
                                 // I'm too lazy to calculate real position for now
-                                recyclerView.getAdapter().notifyItemChanged(4 - (BeamServerData.isCloudAvailable() ? 0 : 1));
+                                recyclerView.getAdapter().notifyItemChanged(4 - (CloudController.hasAccountFeatures() ? 0 : 1));
                             })
                             .show();
                 })),
                 new OptionElement(R.drawable.info_outline_28, getContext().getString(R.string.SettingsAbout)).setOnClick(() -> {
                     Activity act = (Activity) getContext();
                     act.startActivity(new Intent(act, SetupActivity.class).putExtra(SetupActivity.EXTRA_ABOUT, true));
-                }),
-                new OptionElement(R.drawable.telegram, getContext().getString(R.string.SettingsTelegram)).setColor(R.attr.telegramColor, false).setOnClick(() -> {
-                    Activity act = (Activity) getContext();
-                    act.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/ytkab0bp_channel")));
-                }),
-                BeamServerData.isBoostyAvailable() ? new OptionElement(R.drawable.boosty, getContext().getString(R.string.SettingsBoosty)).setColor(R.attr.boostyColorTop, true).setOnClick(() -> {
-                    Activity act = (Activity) getContext();
-                    act.startActivity(new Intent(act, SetupActivity.class).putExtra(SetupActivity.EXTRA_BOOSTY_ONLY, true));
-                }) : null,
-                new OptionElement(R.drawable.k3d_logo_new_14, getContext().getString(R.string.SettingsK3D)).setColor(R.attr.k3dColor, true).setOnClick(() -> {
-                    Activity act = (Activity) getContext();
-                    act.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/K_3_D")));
                 }),
                 new OptionElement(R.drawable.refresh_outline_28, getContext().getString(R.string.SettingsResetToDefault)).setColor(R.attr.textColorNegative, false).setOnClick(() -> {
                     Context ctx = getContext();
@@ -178,13 +165,8 @@ public class SettingsFragment extends ProfileListFragment {
     }
 
     @EventHandler(runOnMainThread = true)
-    public void onDataUpdated(BeamServerDataUpdatedEvent e) {
-        setConfigItems(getConfigItems());
-    }
-
-    @EventHandler(runOnMainThread = true)
     public void onUserInfoUpdated(CloudUserInfoUpdatedEvent e) {
-        if (BeamServerData.isCloudAvailable()) {
+        if (CloudController.hasAccountFeatures()) {
             recyclerView.getAdapter().notifyItemChanged(0);
         }
     }

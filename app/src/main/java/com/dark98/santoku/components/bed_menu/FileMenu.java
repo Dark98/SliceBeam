@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
-import android.provider.MediaStore;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -15,7 +14,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.core.content.FileProvider;
 import androidx.core.graphics.ColorUtils;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -33,20 +31,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import ru.ytkab0bp.eventbus.EventHandler;
-import com.dark98.santoku.BeamServerData;
-import com.dark98.santoku.BuildConfig;
 import com.dark98.santoku.MainActivity;
 import com.dark98.santoku.R;
-import com.dark98.santoku.SetupActivity;
 import com.dark98.santoku.Santoku;
-import com.dark98.santoku.cloud.CloudController;
 import com.dark98.santoku.components.BeamAlertDialogBuilder;
 import com.dark98.santoku.components.UnfoldMenu;
 import com.dark98.santoku.components.WebViewMenu;
 import com.dark98.santoku.config.ConfigObject;
-import com.dark98.santoku.events.CloudFeaturesUpdatedEvent;
-import com.dark98.santoku.events.CloudModelsRemainingCountUpdatedEvent;
-import com.dark98.santoku.events.NeedDismissAIGeneratorMenu;
 import com.dark98.santoku.events.NeedDismissCalibrationsMenu;
 import com.dark98.santoku.events.NeedDismissSnackbarEvent;
 import com.dark98.santoku.events.NeedSnackbarEvent;
@@ -61,11 +52,9 @@ import com.dark98.santoku.slic3r.Bed3D;
 import com.dark98.santoku.slic3r.Slic3rRuntimeError;
 import com.dark98.santoku.theme.BeamTheme;
 import com.dark98.santoku.theme.ThemesRepo;
-import com.dark98.santoku.utils.Prefs;
 import com.dark98.santoku.utils.ViewUtils;
 import com.dark98.santoku.view.DividerView;
 import com.dark98.santoku.view.FadeRecyclerView;
-import com.dark98.santoku.view.SegmentsView;
 import com.dark98.santoku.view.SnackbarsLayout;
 
 public class FileMenu extends ListBedMenu {
@@ -126,29 +115,6 @@ public class FileMenu extends ListBedMenu {
                     }
                 }),
                 new SpaceItem(portrait ? ViewUtils.dp(3) : 0, portrait ? 0 : ViewUtils.dp(3))));
-        if (BeamServerData.isBoostyAvailable() && CloudController.needShowAIGenerator()) {
-            list.add(new BedMenuItem(R.string.MenuFileAIGenerator, R.drawable.picture_stack_outline_28).setShiny(true).onClick(view -> {
-                if (Prefs.getCloudAPIToken() == null || CloudController.getUserInfo() != null && CloudController.getMaxGeneratedModels() == 0) {
-                    Context ctx = view.getContext();
-                    ctx.startActivity(new Intent(ctx, SetupActivity.class).putExtra(SetupActivity.EXTRA_CLOUD_PROFILE, true));
-                    return;
-                }
-                if (CloudController.getUserInfo() == null) {
-                    Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.LOADING, R.string.MenuFileAIGeneratorPleaseWaitSetup).tag(CloudController.USER_INFO_AI_GEN_TAG));
-                    ViewUtils.postOnMainThread(() -> {
-                        if (CloudController.getUserInfo() == null) {
-                            Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(CloudController.USER_INFO_AI_GEN_TAG));
-                            Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.ERROR, R.string.MenuFileAIGeneratorErrorNotLoadedUserAccount));
-                        } else {
-                            fragment.showUnfoldMenu(new AIGeneratorMenu(), view);
-                        }
-                    }, 2500);
-                    return;
-                }
-
-                fragment.showUnfoldMenu(new AIGeneratorMenu(), view);
-            }));
-        }
         list.addAll(Arrays.asList(
                 new BedMenuItem(R.string.MenuFileCalibrations, R.drawable.wrench_outline_28).setSingleLine(true).onClick(v -> {
                     if (!fragment.getGlView().getRenderer().getBed().isValid()) {
@@ -263,10 +229,7 @@ public class FileMenu extends ListBedMenu {
     public void onObjectsChanged(ObjectsListChangedEvent e) {
         ((BedMenuItem) adapter.getItems().get(1)).setEnabled(hasSelection());
         adapter.notifyItemChanged(1);
-
-        int i = 8 - (BeamServerData.isBoostyAvailable() && CloudController.needShowAIGenerator() ? 0 : 1);
-        ((BedMenuItem) adapter.getItems().get(i)).setEnabled(hasModel());
-        adapter.notifyItemChanged(i);
+        updateModelItems();
     }
 
     @EventHandler(runOnMainThread = true)
@@ -275,147 +238,17 @@ public class FileMenu extends ListBedMenu {
         adapter.notifyItemChanged(1);
     }
 
-    @EventHandler(runOnMainThread = true)
-    public void onFeaturedUpdated(CloudFeaturesUpdatedEvent e) {
-        adapter.setItems(onCreateItems(wasPortrait));
-    }
-
-    public final static class AIGeneratorMenu extends UnfoldMenu {
-        private TextView remainingView;
-        private SegmentsView segmentsView;
-
-        @Override
-        public int getRequestedSize(FrameLayout into, boolean portrait) {
-            return (int) (portrait ? ViewUtils.dp(52) + ViewUtils.dp(60) * 2 + ViewUtils.dp(28) + ViewUtils.dp(18) + ViewUtils.dp(2) : into.getWidth() * 0.6f);
+    private void updateModelItems() {
+        int idx = -1;
+        for (int j = adapter.getItems().size() - 1; j >= 0; j--) {
+            if (adapter.getItems().get(j) instanceof BedMenuItem) {
+                idx = j;
+                break;
+            }
         }
-
-        @Override
-        protected View onCreateView(Context ctx, boolean portrait) {
-            LinearLayout ll = new LinearLayout(ctx);
-            ll.setOrientation(LinearLayout.VERTICAL);
-
-            RecyclerView rv = new FadeRecyclerView(ctx);
-            rv.setOverScrollMode(View.OVER_SCROLL_NEVER);
-            SimpleRecyclerAdapter adapter = new SimpleRecyclerAdapter();
-            adapter.setItems(Arrays.asList(
-                    new PreferenceItem().setIcon(R.drawable.camera_outline_28).setTitle(ctx.getString(R.string.MenuFileAIGeneratorFromCamera)).setOnClickListener(v -> {
-                        if (CloudController.getGeneratedModels() >= CloudController.getMaxGeneratedModels()) {
-                            Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.ERROR, R.string.MenuFileAIGeneratorNoGenerationsLeft));
-                            return;
-                        }
-                        if (MainActivity.IS_GENERATING_AI_MODEL) {
-                            Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.WARNING, R.string.MenuFileAIGeneratorAlreadyGenerating));
-                            return;
-                        }
-                        if (ctx instanceof MainActivity) {
-                            try {
-                                MainActivity.aiTempFile = File.createTempFile("ai_capture", ".jpg");
-                                Intent i = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                                i.putExtra(MediaStore.EXTRA_OUTPUT, FileProvider.getUriForFile(ctx, BuildConfig.APPLICATION_ID + ".provider", MainActivity.aiTempFile));
-                                i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                                ((MainActivity) ctx).startActivityForResult(i, MainActivity.REQUEST_CODE_AI_GENERATOR_TAKE_PHOTO);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                    }),
-                    new PreferenceItem().setIcon(R.drawable.picture_outline_28).setTitle(ctx.getString(R.string.MenuFileAIGeneratorFromGallery)).setOnClickListener(v -> {
-                        if (CloudController.getGeneratedModels() >= CloudController.getMaxGeneratedModels()) {
-                            Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.ERROR, R.string.MenuFileAIGeneratorNoGenerationsLeft));
-                            return;
-                        }
-                        if (MainActivity.IS_GENERATING_AI_MODEL) {
-                            Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.WARNING, R.string.MenuFileAIGeneratorAlreadyGenerating));
-                            return;
-                        }
-                        if (ctx instanceof MainActivity) {
-                            Intent intent = new Intent();
-                            intent.setType("image/*");
-                            intent.setAction(Intent.ACTION_GET_CONTENT);
-                            ((MainActivity) ctx).startActivityForResult(Intent.createChooser(intent, ""), MainActivity.REQUEST_CODE_AI_GENERATOR_CHOOSE_PHOTO);
-                        }
-                    })
-            ));
-            rv.setAdapter(adapter);
-            ll.addView(rv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-
-            ll.addView(new DividerView(ctx), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(1f)));
-
-            remainingView = new TextView(ctx);
-            remainingView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-            remainingView.setGravity(Gravity.CENTER);
-            remainingView.setTextColor(ThemesRepo.getColor(android.R.attr.textColorSecondary));
-            ll.addView(remainingView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(18)) {{
-                topMargin = ViewUtils.dp(8);
-            }});
-
-            segmentsView = new SegmentsView(ctx) {
-                @Override
-                protected int onGetColor(int i) {
-                    return i == 1 ? ThemesRepo.getColor(android.R.attr.textColorSecondary) : ThemesRepo.getColor(android.R.attr.colorAccent);
-                }
-            };
-            ll.addView(segmentsView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(12)) {{
-                leftMargin = rightMargin = ViewUtils.dp(12);
-                topMargin = bottomMargin = ViewUtils.dp(8);
-            }});
-            updateRemaining();
-
-            ll.addView(new DividerView(ctx), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(1f)));
-
-            LinearLayout toolbar = new LinearLayout(ctx);
-            toolbar.setPadding(ViewUtils.dp(12), 0, ViewUtils.dp(12), 0);
-            toolbar.setOrientation(LinearLayout.HORIZONTAL);
-            toolbar.setGravity(Gravity.CENTER_VERTICAL);
-            toolbar.setBackground(ViewUtils.createRipple(ThemesRepo.getColor(android.R.attr.colorControlHighlight), 0));
-            toolbar.setOnClickListener(v -> dismiss());
-
-            ImageView icon = new ImageView(ctx);
-            icon.setImageResource(R.drawable.arrow_left_outline_28);
-            icon.setColorFilter(ThemesRepo.getColor(android.R.attr.textColorSecondary));
-            toolbar.addView(icon, new LinearLayout.LayoutParams(ViewUtils.dp(28), ViewUtils.dp(28)));
-
-            TextView title = new TextView(ctx);
-            title.setText(R.string.MenuOrientationPositionBack);
-            title.setTypeface(ViewUtils.getTypeface(ViewUtils.ROBOTO_MEDIUM));
-            title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
-            title.setTextColor(ThemesRepo.getColor(android.R.attr.textColorPrimary));
-            toolbar.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f) {{
-                leftMargin = ViewUtils.dp(12);
-            }});
-            ll.addView(toolbar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewUtils.dp(52)));
-            return ll;
-        }
-
-        @Override
-        protected void onCreate() {
-            super.onCreate();
-
-            Santoku.EVENT_BUS.registerListener(this);
-            ViewUtils.postOnMainThread(() -> segmentsView.startAnimation(), 50);
-        }
-
-        @EventHandler(runOnMainThread = true)
-        public void onDismiss(NeedDismissAIGeneratorMenu e) {
-            dismiss();
-        }
-
-        @EventHandler(runOnMainThread = true)
-        public void onRemainingUpdated(CloudModelsRemainingCountUpdatedEvent e) {
-            updateRemaining();
-        }
-
-        @Override
-        protected void onDestroy() {
-            super.onDestroy();
-
-            Santoku.EVENT_BUS.unregisterListener(this);
-        }
-
-        private void updateRemaining() {
-            int rev = CloudController.getMaxGeneratedModels() - CloudController.getGeneratedModels();
-            remainingView.setText(Santoku.INSTANCE.getString(R.string.MenuFileAIGeneratorRemaining, rev, CloudController.getMaxGeneratedModels()));
-            segmentsView.setValues(new float[]{0, rev / (float) CloudController.getMaxGeneratedModels(), 1});
+        if (idx != -1) {
+            ((BedMenuItem) adapter.getItems().get(idx)).setEnabled(hasModel());
+            adapter.notifyItemChanged(idx);
         }
     }
 

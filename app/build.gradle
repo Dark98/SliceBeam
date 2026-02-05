@@ -6,6 +6,8 @@ plugins {
 }
 
 def commit = getGitCommitHash(file('.'))
+def prodCloudBaseUrl = "https://santoku.dark98.co.uk/v1/"
+def prodBeamBaseUrl = "https://santoku.dark98.co.uk"
 
 android {
     namespace 'com.dark98.santoku'
@@ -16,9 +18,11 @@ android {
         minSdk 21
         targetSdk 35
         versionCode 8
-        versionName "0.3.0"
+        versionName "0.0.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "CLOUD_BASE_URL_PROD", "\"" + prodCloudBaseUrl + "\""
+        buildConfigField "String", "BEAM_BASE_URL_PROD", "\"" + prodBeamBaseUrl + "\""
 
         externalNativeBuild {
             cmake {
@@ -39,7 +43,6 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            buildConfigField "boolean", "IS_GOOGLE_PLAY", "false"
             buildConfigField "String", "COMMIT", "\"" + commit + "\""
             ndk {
                 //noinspection ChromeOsAbiSupport
@@ -47,7 +50,6 @@ android {
             }
         }
         debug {
-            buildConfigField "boolean", "IS_GOOGLE_PLAY", "false"
             buildConfigField "String", "COMMIT", "\"" + commit + "\""
             ndk {
                 debugSymbolLevel 'NONE'

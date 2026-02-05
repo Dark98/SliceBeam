@@ -2,19 +2,13 @@ package com.dark98.santoku;
 
 import android.app.Activity;
 import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Intent;
 import android.content.res.Configuration;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Process;
-import android.provider.MediaStore;
-import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.SparseArray;
@@ -32,7 +26,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -48,14 +41,11 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.zip.ZipFile;
 
-import ru.ytkab0bp.sapil.APICallback;
-import com.dark98.santoku.cloud.CloudAPI;
 import com.dark98.santoku.cloud.CloudController;
 import com.dark98.santoku.components.BeamAlertDialogBuilder;
 import com.dark98.santoku.components.ChangeLogBottomSheet;
 import com.dark98.santoku.components.UnfoldMenu;
 import com.dark98.santoku.config.ConfigObject;
-import com.dark98.santoku.events.NeedDismissAIGeneratorMenu;
 import com.dark98.santoku.events.NeedDismissSnackbarEvent;
 import com.dark98.santoku.events.NeedSnackbarEvent;
 import com.dark98.santoku.events.ObjectsListChangedEvent;
@@ -76,8 +66,7 @@ public class MainActivity extends AppCompatActivity {
     // Activity result
     public final static int REQUEST_CODE_OPEN_FILE = 1, REQUEST_CODE_EXPORT_GCODE = 2,
                             REQUEST_CODE_IMPORT_PROFILES = 3, REQUEST_CODE_EXPORT_PROFILES = 4,
-                            REQUEST_CODE_EXPORT_3MF = 5,
-                            REQUEST_CODE_AI_GENERATOR_TAKE_PHOTO = 6, REQUEST_CODE_AI_GENERATOR_CHOOSE_PHOTO = 7;
+                            REQUEST_CODE_EXPORT_3MF = 5;
 
     private static MainActivity activeInstance;
 
@@ -85,9 +74,6 @@ public class MainActivity extends AppCompatActivity {
     public static List<ConfigObject> EXPORTING_FILAMENTS;
     public static List<ConfigObject> EXPORTING_PRINTERS;
 
-    public static boolean IS_GENERATING_AI_MODEL;
-
-    public static File aiTempFile;
 
     private static SparseArray<NavigationDelegate> liveDelegate = new SparseArray<>();
     private static int lastId;
@@ -154,8 +140,13 @@ public class MainActivity extends AppCompatActivity {
         setContentView(v);
 
         if (getIntent() != null && getIntent().getAction() != null && getIntent().getAction().equals(Intent.ACTION_VIEW)) {
-            loadFile(getIntent().getData());
-            setIntent(null);
+            Uri data = getIntent().getData();
+            if (data != null && "santoku".equalsIgnoreCase(data.getScheme())) {
+                setIntent(null);
+            } else {
+                loadFile(data);
+                setIntent(null);
+            }
         }
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
@@ -196,7 +187,6 @@ public class MainActivity extends AppCompatActivity {
 
         if (!Objects.equals(Prefs.getLastCommit(), BuildConfig.COMMIT) && Santoku.hasUpdateInfo) {
             Prefs.setLastCommit();
-            BeamServerData.load();
             new ChangeLogBottomSheet(this).show();
         }
     }
@@ -209,7 +199,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onNewIntent(@NonNull Intent intent) {
         super.onNewIntent(intent);
-        loadFile(intent.getData());
+        Uri data = intent.getData();
+        if (data != null && "santoku".equalsIgnoreCase(data.getScheme())) {
+            return;
+        }
+        loadFile(data);
         setIntent(null);
     }
 
@@ -326,23 +320,6 @@ public class MainActivity extends AppCompatActivity {
                             .setMessage(e.toString())
                             .setPositiveButton(android.R.string.ok, null)
                             .show();
-                }
-            } else if (requestCode == REQUEST_CODE_AI_GENERATOR_TAKE_PHOTO) {
-                Santoku.EVENT_BUS.fireEvent(new NeedDismissAIGeneratorMenu());
-
-                Bitmap bm = BitmapFactory.decodeFile(aiTempFile.getAbsolutePath());
-                generateAiModel(bm);
-                aiTempFile.delete();
-                aiTempFile = null;
-            } else if (requestCode == REQUEST_CODE_AI_GENERATOR_CHOOSE_PHOTO) {
-                Santoku.EVENT_BUS.fireEvent(new NeedDismissAIGeneratorMenu());
-
-                try {
-                    InputStream in = getContentResolver().openInputStream(data.getData());
-                    Bitmap bm = BitmapFactory.decodeStream(in);
-                    generateAiModel(bm);
-                } catch (Exception e) {
-                    Log.e("ai_generator", "Failed to write to downloads", e);
                 }
             }
         }
@@ -487,110 +464,6 @@ public class MainActivity extends AppCompatActivity {
                         .setPositiveButton(android.R.string.ok, null)
                         .show());
             }
-        });
-    }
-
-    private void generateAiModel(Bitmap bm) {
-        IS_GENERATING_AI_MODEL = true;
-        String uploadTag = UUID.randomUUID().toString();
-        Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.LOADING, R.string.MenuFileAIGeneratorUploading).tag(uploadTag));
-        IOUtils.IO_POOL.submit(()->{
-            Bitmap scaled;
-            if (bm.getWidth() > 1024 || bm.getHeight() > 1024) {
-                if (bm.getWidth() > bm.getHeight()) {
-                    int w = 1024;
-                    int h = (int) ((float) w * bm.getHeight() / bm.getWidth());
-                    scaled = Bitmap.createScaledBitmap(bm, w, h, true);
-                } else {
-                    int h = 1024;
-                    int w = (int) ((float) h * bm.getWidth() / bm.getHeight());
-                    scaled = Bitmap.createScaledBitmap(bm, w, h, true);
-                }
-                bm.recycle();
-            } else {
-                scaled = bm;
-            }
-
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            scaled.compress(Bitmap.CompressFormat.PNG, 100, out);
-            scaled.recycle();
-
-            String processTag = UUID.randomUUID().toString();
-            CloudAPI.INSTANCE.modelsGenerate(Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP), "image/png", new APICallback<InputStream>() {
-                @Override
-                public void onResponse(InputStream in) {
-                    Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(processTag));
-
-                    String downloadTag = UUID.randomUUID().toString();
-                    Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.LOADING, R.string.MenuFileAIGeneratorDownloading).tag(downloadTag));
-                    String fileName = "generated_" + UUID.randomUUID() + ".stl";
-
-                    File f = new File(Santoku.getModelCacheDir(), fileName);
-                    try {
-                        FileOutputStream fos = new FileOutputStream(f);
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            ContentValues contentValues = new ContentValues();
-                            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-                            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.ms-pki.stl");
-                            contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-
-                            Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues);
-
-                            if (uri != null) {
-                                try {
-                                    OutputStream out = getContentResolver().openOutputStream(uri);
-                                    byte[] buf = new byte[10240];
-                                    int c;
-                                    while ((c = in.read(buf)) != -1) {
-                                        out.write(buf, 0, c);
-                                        fos.write(buf, 0, c);
-                                    }
-                                    out.close();
-                                } catch (IOException e) {
-                                    Log.e("ai_generator", "Failed to write to downloads", e);
-                                }
-                            }
-                        } else {
-                            File downloadsDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                            File file = new File(downloadsDirectory, fileName);
-
-                            try {
-                                FileOutputStream out = new FileOutputStream(file);
-                                byte[] buf = new byte[10240];
-                                int c;
-                                while ((c = in.read(buf)) != -1) {
-                                    out.write(buf, 0, c);
-                                    fos.write(buf, 0, c);
-                                }
-                                out.close();
-                            } catch (IOException e) {
-                                Log.e("ai_generator", "Failed to write to downloads", e);
-                            }
-                        }
-                        fos.close();
-                    } catch (Exception e) {
-                        Log.e("ai_generator", "Failed to write to downloads", e);
-                    }
-                    Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(downloadTag));
-                    Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(R.string.MenuFileAIGeneratorSavedAs, fileName));
-                    loadFile(f, true);
-                    CloudController.checkGeneratorRemaining();
-                    IS_GENERATING_AI_MODEL = false;
-                }
-
-                @Override
-                public void onException(Exception e) {
-                    Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(processTag));
-                    ViewUtils.postOnMainThread(() -> new BeamAlertDialogBuilder(MainActivity.this)
-                            .setTitle(R.string.MenuFileAIGeneratorError)
-                            .setMessage(e.toString())
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show());
-                    IS_GENERATING_AI_MODEL = false;
-                }
-            });
-            Santoku.EVENT_BUS.fireEvent(new NeedDismissSnackbarEvent(uploadTag));
-            Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.LOADING, R.string.MenuFileAIGeneratorProcessing).tag(processTag));
         });
     }
 

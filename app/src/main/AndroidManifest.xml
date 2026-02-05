@@ -8,9 +8,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <queries>
-        <intent>
-            <action android:name="android.media.action.IMAGE_CAPTURE" />
-        </intent>
         <!-- WebView fails sometime if not queried, idk why -->
         <package android:name="com.google.android.webview"/>
     </queries>
@@ -40,6 +37,13 @@
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="santoku" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
