@@ -6,7 +6,13 @@ import com.dark98.santoku.BuildConfig;
 public class EventBusTask extends BootTask {
 
     public EventBusTask() {
-        super(() -> EventBus.registerImpl(BuildConfig.APPLICATION_ID));
+        super(() -> {
+            String appId = BuildConfig.APPLICATION_ID;
+            if (BuildConfig.DEBUG && appId.endsWith(".debug")) {
+                appId = appId.substring(0, appId.length() - ".debug".length());
+            }
+            EventBus.registerImpl(appId);
+        });
         onWorker();
     }
 }

@@ -898,9 +898,14 @@ public class SetupActivity extends AppCompatActivity {
                             Toast.makeText(ctx, R.string.SettingsCloudManageSignUpMissingFields, Toast.LENGTH_SHORT).show();
                             return;
                         }
+                        CloudAPI api = CloudController.getApiSafe();
+                        if (api == null) {
+                            Toast.makeText(ctx, R.string.SettingsCloudManageSignUpFailed, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
                         signUpInProgress = true;
                         bindLoginButton(true);
-                        CloudAPI.INSTANCE.signup(email, password, displayName, new APICallback<CloudAPI.AuthToken>() {
+                        api.signup(email, password, displayName, new APICallback<CloudAPI.AuthToken>() {
                             @Override
                             public void onResponse(CloudAPI.AuthToken response) {
                                 Prefs.setCloudAPIToken(response.bearer);

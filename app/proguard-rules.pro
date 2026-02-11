@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep cloud API and SAPIL runtime proxies.
+-keep class com.dark98.santoku.cloud.** { *; }
+-keep class ru.ytkab0bp.sapil.** { *; }

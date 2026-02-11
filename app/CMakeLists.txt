@@ -17,6 +17,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(IS_CLANG_CL TRUE)
 set(CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-imsvc")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-old-style-cast -Wno-reserved-id-macro -Wno-c++98-compat-pedantic -funwind-tables -fopenmp -static-openmp -Wl,--no-merge-exidx-entries")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,common-page-size=16384 -Wl,-z,max-page-size=16384")
 add_compile_options(-fsigned-char)
 
 # Suppress all warnings
@@ -1352,3 +1353,10 @@ target_link_libraries(slic3r PRIVATE
         boost_wserialization
         ${OCCT_LIBS}
 )
+
+if(ANDROID)
+    target_link_options(slic3r PRIVATE
+            "-Wl,-z,common-page-size=16384"
+            "-Wl,-z,max-page-size=16384"
+            "-Wl,--rosegment")
+endif()

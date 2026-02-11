@@ -71,7 +71,7 @@ public class Slic3rLocalization {
     }
 
     private static String replaceStr(String val) {
-        return val.replace("\\n", "\n").replaceAll("\\\\(.)", "$1").replace("Slic3r", "Slice Beam").replace("PrusaSlicer", "Slice Beam");
+        return val.replace("\\n", "\n").replaceAll("\\\\(.)", "$1").replace("Slic3r", "Santoku").replace("PrusaSlicer", "Santoku");
     }
 
     public static String getString(String key) {

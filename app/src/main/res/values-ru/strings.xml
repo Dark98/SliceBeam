@@ -140,7 +140,7 @@
     <string name="IntroConfigured">Похоже всё настроено.\nПросто нажмите завершить!</string>
     <string name="IntroFinish">Завершить</string>
     <string name="IntroEarlyAccess">Ранний доступ</string>
-    <string name="IntroEarlyAccessMessage">Вы используете ранний доступ Slice Beam.\nПожалуйста обратите внимание, что некоторые функции могут быть недоступны, содержать ошибки или работать не так, как ожидается.\nДля получения новостей о приложении подпишитесь на Telegram-канал разработчика.</string>
+    <string name="IntroEarlyAccessMessage">Вы используете ранний доступ Santoku.\nОбратите внимание, что некоторые функции могут быть недоступны, содержать ошибки или работать не так, как ожидается.</string>
     <string name="SettingsResetToDefault">Сбросить настройки по-умолчанию</string>
     <string name="SettingsResetToDefaultTitle">Вы уверены?</string>
     <string name="SettingsResetToDefaultDescription">Это действие не может быть отменено.</string>

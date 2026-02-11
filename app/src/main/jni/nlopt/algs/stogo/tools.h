@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <iterator>
 #include <list>
+#include <functional>
 
 #include "linalg.h"
 
@@ -36,7 +37,7 @@ public:
   friend ostream & operator << (ostream &, RCTrial) ;
 };
 
-class TrialGT : public unary_function<Trial, bool>
+class TrialGT
 // Predicate for Trial (needed for remove_if)
 {
 public:

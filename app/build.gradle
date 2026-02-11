@@ -17,7 +17,7 @@ android {
         applicationId "com.dark98.santoku"
         minSdk 21
         targetSdk 35
-        versionCode 8
+        versionCode 1
         versionName "0.0.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -50,6 +50,8 @@ android {
             }
         }
         debug {
+            applicationIdSuffix ".debug"
+            resValue "string", "AppName", "Santoku (Debug)"
             buildConfigField "String", "COMMIT", "\"" + commit + "\""
             ndk {
                 debugSymbolLevel 'NONE'
@@ -67,7 +69,7 @@ android {
         cmake {
             path file('CMakeLists.txt')
         }
-        ndkVersion "23.1.7779620"
+        ndkVersion "29.0.14206865"
     }
 
     buildFeatures {
@@ -76,7 +78,9 @@ android {
 
     applicationVariants.all { variant ->
         variant.outputs.all {
-            outputFileName = "Santoku_" + commit + ".apk"
+            def isDebug = variant.buildType.name == "debug"
+            def suffix = isDebug ? "_debug" : ""
+            outputFileName = "Santoku_" + commit + suffix + ".apk"
         }
     }
 }
@@ -151,6 +155,8 @@ def toolchainFile = "${ndkDir}/build/cmake/android.toolchain.cmake"
 def wslExe = "${System.getenv("SystemRoot") ?: "C:/Windows"}/System32/wsl.exe"
 def prebuiltTag = isWindows ? "windows-x86_64" : (isMac ? "darwin-x86_64" : "linux-x86_64")
 def llvmBinDir = "${ndkDir}/toolchains/llvm/prebuilt/${prebuiltTag}/bin"
+def pageSizeLinkerFlags = "-Wl,-z,common-page-size=16384 -Wl,-z,max-page-size=16384"
+def forceNativeRebuild = project.hasProperty("forceNativeRebuild") && project.property("forceNativeRebuild").toString().toLowerCase() == "true"
 
 def tbbSrc = "${rootDir}/third_party/openvdb-android/tbb-aarch64"
 def tbbBuildArm64 = "${rootDir}/third_party/openvdb-android/build-tbb-android-21-arm64"
@@ -287,6 +293,7 @@ tasks.register("patchBoostForAndroid") {
 tasks.register("buildTbbArm64") {
     dependsOn("ensureThirdParty")
     onlyIf {
+        forceNativeRebuild ||
         !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbb.a").exists() ||
                 !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbbmalloc.a").exists() ||
                 !file("${projectDir}/src/main/jniLibs/arm64-v8a/libtbb.so").exists() ||
@@ -304,6 +311,7 @@ tasks.register("buildTbbArm64") {
                     "-DANDROID_PLATFORM=android-21",
                     "-DANDROID_STL=c++_shared",
                     "-DCMAKE_BUILD_TYPE=Release",
+                    "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
                     "-DCMAKE_INSTALL_PREFIX=${tbbInstallArm64}",
                     "-DTBB_BUILD_TESTS=Off"
         }
@@ -316,6 +324,7 @@ tasks.register("buildTbbArm64") {
 tasks.register("buildTbbArmv7") {
     dependsOn("ensureThirdParty")
     onlyIf {
+        forceNativeRebuild ||
         !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbb.a").exists() ||
                 !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbbmalloc.a").exists() ||
                 !file("${projectDir}/src/main/jniLibs/armeabi-v7a/libtbb.so").exists() ||
@@ -333,6 +342,7 @@ tasks.register("buildTbbArmv7") {
                     "-DANDROID_PLATFORM=android-21",
                     "-DANDROID_STL=c++_shared",
                     "-DCMAKE_BUILD_TYPE=Release",
+                    "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
                     "-DCMAKE_INSTALL_PREFIX=${tbbInstallArmv7}",
                     "-DTBB_BUILD_TESTS=Off"
         }
@@ -345,6 +355,7 @@ tasks.register("buildTbbArmv7") {
 tasks.register("copyTbbArm64", Copy) {
     dependsOn("buildTbbArm64")
     onlyIf {
+        forceNativeRebuild ||
         !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbb.a").exists() ||
                 !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbbmalloc.a").exists() ||
                 !file("${projectDir}/src/main/jniLibs/arm64-v8a/libtbb.so").exists() ||
@@ -383,6 +394,7 @@ tasks.register("copyTbbArm64", Copy) {
 tasks.register("copyTbbArmv7", Copy) {
     dependsOn("buildTbbArmv7")
     onlyIf {
+        forceNativeRebuild ||
         !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbb.a").exists() ||
                 !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbbmalloc.a").exists() ||
                 !file("${projectDir}/src/main/jniLibs/armeabi-v7a/libtbb.so").exists() ||
@@ -504,7 +516,7 @@ tasks.register("copyBoostHeaders", Copy) {
 
 tasks.register("buildOcctArm64") {
     dependsOn("ensureThirdParty")
-    onlyIf { !file("${projectDir}/src/main/occt/jniLibs/arm64-v8a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/arm64-v8a/libTKDESTEP.so").exists() }
     doLast {
         exec {
             commandLine cmakeExe, "-G", "Ninja",
@@ -516,6 +528,7 @@ tasks.register("buildOcctArm64") {
                     "-DANDROID_PLATFORM=android-21",
                     "-DCMAKE_BUILD_TYPE=Release",
                     "-DBUILD_LIBRARY_TYPE=Shared",
+                    "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
                     "-DINSTALL_DIR_LIB=libs/arm64-v8a",
                     "-DINSTALL_DIR_INCLUDE=inc",
                     "-DBUILD_DOC_Overview=OFF",
@@ -533,7 +546,7 @@ tasks.register("buildOcctArm64") {
 
 tasks.register("buildOcctArmv7") {
     dependsOn("ensureThirdParty")
-    onlyIf { !file("${projectDir}/src/main/occt/jniLibs/armeabi-v7a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/armeabi-v7a/libTKDESTEP.so").exists() }
     doLast {
         exec {
             commandLine cmakeExe, "-G", "Ninja",
@@ -545,6 +558,7 @@ tasks.register("buildOcctArmv7") {
                     "-DANDROID_PLATFORM=android-21",
                     "-DCMAKE_BUILD_TYPE=Release",
                     "-DBUILD_LIBRARY_TYPE=Shared",
+                    "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
                     "-DINSTALL_DIR_LIB=libs/armeabi-v7a",
                     "-DINSTALL_DIR_INCLUDE=inc",
                     "-DBUILD_DOC_Overview=OFF",
@@ -562,7 +576,7 @@ tasks.register("buildOcctArmv7") {
 
 tasks.register("copyOcctArm64", Copy) {
     dependsOn("buildOcctArm64")
-    onlyIf { !file("${projectDir}/src/main/occt/jniLibs/arm64-v8a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/arm64-v8a/libTKDESTEP.so").exists() }
     from("${occtDistArm64}/libs/arm64-v8a") {
         include "*.so"
     }
@@ -571,7 +585,7 @@ tasks.register("copyOcctArm64", Copy) {
 
 tasks.register("copyOcctArmv7", Copy) {
     dependsOn("buildOcctArmv7")
-    onlyIf { !file("${projectDir}/src/main/occt/jniLibs/armeabi-v7a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/armeabi-v7a/libTKDESTEP.so").exists() }
     from("${occtDistArmv7}/libs/armeabi-v7a") {
         include "*.so"
     }

@@ -16,7 +16,7 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/icon"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/AppName"
         android:supportsRtl="true"
         android:theme="@style/Theme.Santoku"
@@ -59,7 +59,7 @@
         <activity android:name=".SetupActivity" android:exported="false"/>
         <activity android:name=".SafeStartActivity" android:exported="false"/>
         <provider
-            android:authorities="com.dark98.santoku.provider"
+            android:authorities="${applicationId}.provider"
             android:name="androidx.core.content.FileProvider"
             android:grantUriPermissions="true"
             android:exported="false">

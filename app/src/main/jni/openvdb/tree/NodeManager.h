@@ -327,7 +327,7 @@ private:
         void operator()(const NodeRange& range) const
         {
             for (typename NodeRange::Iterator it = range.begin(); it; ++it) {
-                OpT::template eval(mNodeOp, it);
+                OpT::eval(mNodeOp, it);
             }
         }
         const NodeOp mNodeOp;
@@ -347,7 +347,7 @@ private:
         void operator()(const NodeRange& range) const
         {
             for (typename NodeRange::Iterator it = range.begin(); it; ++it) {
-                OpT::template eval(mNodeOp, it);
+                OpT::eval(mNodeOp, it);
             }
         }
         const NodeOp& mNodeOp;
@@ -372,7 +372,7 @@ private:
         void operator()(const NodeRange& range)
         {
             for (typename NodeRange::Iterator it = range.begin(); it; ++it) {
-                OpT::template eval(*mNodeOp, it);
+                OpT::eval(*mNodeOp, it);
             }
         }
         void join(const NodeReducer& other)

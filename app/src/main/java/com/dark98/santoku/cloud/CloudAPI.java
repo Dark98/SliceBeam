@@ -38,6 +38,11 @@ public interface CloudAPI extends APIRunner {
             }
             return headers;
         }
+
+        @Override
+        public ru.ytkab0bp.sapil.util.Pair<String, String> getNamingTransformPolicy() {
+            return null;
+        }
     });
 
     /**

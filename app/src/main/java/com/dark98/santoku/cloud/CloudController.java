@@ -51,7 +51,14 @@ public class CloudController {
     private static Runnable loginCheck = new Runnable() {
         @Override
         public void run() {
-            CloudAPI.INSTANCE.loginCheck(loginSessionId, new APICallback<CloudAPI.LoginState>() {
+            CloudAPI api = getApiSafe();
+            if (api == null) {
+                loginSessionId = null;
+                isLoggingIn = false;
+                Santoku.EVENT_BUS.fireEvent(new CloudLoginStateUpdatedEvent());
+                return;
+            }
+            api.loginCheck(loginSessionId, new APICallback<CloudAPI.LoginState>() {
                 @Override
                 public void onResponse(CloudAPI.LoginState response) {
                     if (response.loggedIn) {
@@ -77,6 +84,15 @@ public class CloudController {
 
     private static Gson gson = new Gson();
 
+    public static CloudAPI getApiSafe() {
+        try {
+            return CloudAPI.INSTANCE;
+        } catch (Throwable t) {
+            Log.e(TAG, "Cloud API unavailable", t);
+            return null;
+        }
+    }
+
     public static void initCached() {
         if (Prefs.getCloudAPIToken() != null) {
             if (Prefs.getCloudCachedUserInfo() != null) {
@@ -101,7 +117,11 @@ public class CloudController {
     }
 
     private static void loadUserInfo() {
-        CloudAPI.INSTANCE.userGetInfo(new APICallback<CloudAPI.UserInfo>() {
+        CloudAPI api = getApiSafe();
+        if (api == null) {
+            return;
+        }
+        api.userGetInfo(new APICallback<CloudAPI.UserInfo>() {
             @Override
             public void onResponse(CloudAPI.UserInfo response) {
                 userInfo = response;
@@ -145,7 +165,13 @@ public class CloudController {
     }
 
     private static void beginLogin0() {
-        beginLoginHandle = CloudAPI.INSTANCE.loginBegin(new APICallback<CloudAPI.LoginData>() {
+        CloudAPI api = getApiSafe();
+        if (api == null) {
+            isLoggingIn = false;
+            Santoku.EVENT_BUS.fireEvent(new CloudLoginStateUpdatedEvent());
+            return;
+        }
+        beginLoginHandle = api.loginBegin(new APICallback<CloudAPI.LoginData>() {
             @Override
             public void onResponse(CloudAPI.LoginData response) {
                 loginSessionId = response.sessionId;
@@ -172,7 +198,10 @@ public class CloudController {
         isLoggingIn = false;
         Santoku.EVENT_BUS.fireEvent(new CloudLoginStateUpdatedEvent());
         if (loginSessionId != null) {
-            CloudAPI.INSTANCE.loginCancel(loginSessionId, response -> {});
+            CloudAPI api = getApiSafe();
+            if (api != null) {
+                api.loginCancel(loginSessionId, response -> {});
+            }
         }
         if (beginLoginHandle != null && beginLoginHandle.isRunning()) {
             beginLoginHandle.cancel();
@@ -184,7 +213,10 @@ public class CloudController {
     }
 
     public static void logout() {
-        CloudAPI.INSTANCE.logout(response -> {});
+        CloudAPI api = getApiSafe();
+        if (api != null) {
+            api.logout(response -> {});
+        }
         Prefs.setCloudAPIToken(null);
         userInfo = null;
         Santoku.EVENT_BUS.fireEvent(new CloudLoginStateUpdatedEvent());
@@ -204,7 +236,12 @@ public class CloudController {
     }
 
     private static void downloadData(long lastModified) {
-        CloudAPI.INSTANCE.syncGet(new APICallback<String>() {
+        CloudAPI api = getApiSafe();
+        if (api == null) {
+            isSyncInProgress = false;
+            return;
+        }
+        api.syncGet(new APICallback<String>() {
             @Override
             public void onResponse(String response) {
                 IOUtils.IO_POOL.submit(() -> {
@@ -251,11 +288,15 @@ public class CloudController {
         if (isSyncInProgress) {
             return;
         }
+        CloudAPI api = getApiSafe();
+        if (api == null) {
+            return;
+        }
         long modified = Prefs.getCloudLocalLastModified();
         isSyncInProgress = true;
         Santoku.EVENT_BUS.fireEvent(new NeedSnackbarEvent(SnackbarsLayout.Type.LOADING, R.string.CloudSyncInProgress).tag(CLOUD_SYNC_TAG));
 
-        CloudAPI.INSTANCE.syncGetState(new APICallback<CloudAPI.SyncState>() {
+        api.syncGetState(new APICallback<CloudAPI.SyncState>() {
             @Override
             public void onResponse(CloudAPI.SyncState response) {
                 if (Santoku.CONFIG == null && response.usedSize != 0) {
@@ -324,7 +365,12 @@ public class CloudController {
                 bos.close();
                 fis.close();
 
-                CloudAPI.INSTANCE.syncUpload(Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP), "application/ini", new APICallback<CloudAPI.SyncState>() {
+                CloudAPI api = getApiSafe();
+                if (api == null) {
+                    isSyncInProgress = false;
+                    return;
+                }
+                api.syncUpload(Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP), "application/ini", new APICallback<CloudAPI.SyncState>() {
                     @Override
                     public void onResponse(CloudAPI.SyncState response) {
                         isSyncInProgress = false;

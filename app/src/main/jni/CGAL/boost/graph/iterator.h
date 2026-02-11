@@ -221,7 +221,7 @@ public:
 
   operator bool_type() const
   {
-    return (! (this->base() == nullptr)) ?
+    return (g != nullptr) ?
       &Halfedge_around_source_iterator::this_type_does_not_support_comparisons : 0;
   }
 
@@ -321,7 +321,7 @@ public:
 
   operator bool_type() const
   {
-    return (! (this->base() == nullptr)) ?
+    return (g != nullptr) ?
       &Halfedge_around_target_iterator::this_type_does_not_support_comparisons : 0;
   }
 
@@ -420,7 +420,7 @@ public:
 
   operator bool_type() const
   {
-    return (! (this->base() == nullptr)) ?
+    return (g != nullptr) ?
       &Halfedge_around_face_iterator::this_type_does_not_support_comparisons : 0;
   }
 

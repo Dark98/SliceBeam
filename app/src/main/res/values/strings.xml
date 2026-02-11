@@ -140,7 +140,7 @@
     <string name="IntroConfigured">All seems to be configured.\nJust tap finish!</string>
     <string name="IntroFinish">Finish</string>
     <string name="IntroEarlyAccess">Early access</string>
-    <string name="IntroEarlyAccessMessage">You are using an Early Access of Slice Beam.\nPlease note that some features may be unavailable, buggy or work not as expected.\nPlease subscribe to developer\'s Telegram for app\'s news.</string>
+    <string name="IntroEarlyAccessMessage">You are using an Early Access of Santoku.\nPlease note that some features may be unavailable, buggy or work not as expected.</string>
     <string name="SettingsResetToDefault">Reset to defaults</string>
     <string name="SettingsResetToDefaultTitle">Are you sure?</string>
     <string name="SettingsResetToDefaultDescription">This action can not be undone.</string>
