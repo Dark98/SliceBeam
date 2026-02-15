@@ -258,7 +258,11 @@ public class FilamentConfigFragment extends ProfileListFragment {
 
     @Override
     protected void onResetConfig() {
-        currentConfig = new ConfigObject(Santoku.CONFIG.findFilament(Santoku.CONFIG.presets.get("filament")));
+        ConfigObject base = Santoku.CONFIG.findFilament(Santoku.CONFIG.presets.get("filament"));
+        if (base == null && Santoku.CONFIG.filamentConfigs != null && !Santoku.CONFIG.filamentConfigs.isEmpty()) {
+            base = Santoku.CONFIG.filamentConfigs.get(0);
+        }
+        currentConfig = base != null ? new ConfigObject(base) : ConfigObject.createCustomFilamentProfile();
     }
 
     @Override
