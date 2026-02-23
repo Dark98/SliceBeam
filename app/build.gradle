@@ -94,11 +94,62 @@ tasks.withType(JavaCompile).configureEach {
 
 static String getGitCommitHash(File dir) {
     try {
-        return Runtime.getRuntime().exec("git rev-parse HEAD", null, dir).inputStream.readLines().get(0).substring(0, 10)
-    } catch (Exception e){
-        println("Unable to get git commit hash:")
-        e.printStackTrace()
-        return "non-git build"
+        File gitDir = new File(dir, ".git")
+        if (!gitDir.exists()) {
+            return "non-git"
+        }
+
+        // Worktree/submodule support: .git may be a file with "gitdir: <path>".
+        if (gitDir.isFile()) {
+            String pointer = gitDir.text.trim()
+            if (pointer.startsWith("gitdir:")) {
+                gitDir = new File(dir, pointer.substring("gitdir:".length()).trim())
+            }
+        }
+
+        if (!gitDir.exists() || !gitDir.isDirectory()) {
+            return "non-git"
+        }
+
+        File headFile = new File(gitDir, "HEAD")
+        if (!headFile.exists()) {
+            return "non-git"
+        }
+
+        String head = headFile.text.trim()
+        String fullHash = null
+        if (head.startsWith("ref:")) {
+            String refPath = head.substring("ref:".length()).trim()
+            File refFile = new File(gitDir, refPath)
+            if (refFile.exists()) {
+                fullHash = refFile.text.trim()
+            } else {
+                File packedRefs = new File(gitDir, "packed-refs")
+                if (packedRefs.exists()) {
+                    String prefix = refPath + " "
+                    for (String line : packedRefs.readLines()) {
+                        if (line.startsWith("#") || line.startsWith("^") || line.trim().isEmpty()) {
+                            continue
+                        }
+                        int space = line.indexOf(' ')
+                        if (space > 0 && line.substring(space + 1).trim() == refPath) {
+                            fullHash = line.substring(0, space).trim()
+                            break
+                        }
+                    }
+                }
+            }
+        } else {
+            // Detached HEAD.
+            fullHash = head
+        }
+
+        if (!fullHash || fullHash.length() < 10) {
+            return "non-git"
+        }
+        return fullHash.substring(0, 10)
+    } catch (Exception ignored) {
+        return "non-git"
     }
 }
 
@@ -173,32 +224,55 @@ def occtDistArmv7 = "${rootDir}/third_party/occt/dist/android-armeabi-v7a"
 def boostDir = "${rootDir}/third_party/Boost-for-Android"
 def boostOutArm64 = "${boostDir}/build/out/arm64-v8a"
 def boostOutArmv7 = "${boostDir}/build/out/armeabi-v7a"
+def rootPathForTasks = rootProject.projectDir.absolutePath
+def appProjectPath = project.projectDir.absolutePath
+def boostArm64OutLib = "${appProjectPath}/src/main/jniImports/boost/lib/arm64-v8a/lib/libboost_atomic-clang-mt-a64-1_85.a"
+def boostArmv7OutLib = "${appProjectPath}/src/main/jniImports/boost/lib/armeabi-v7a/lib/libboost_atomic-clang-mt-a32-1_85.a"
+def boostHeadersOut = "${appProjectPath}/src/main/jniImports/boost/include/boost/variant.hpp"
+def tbbArm64LibA = "${appProjectPath}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbb.a"
+def tbbArm64MallocA = "${appProjectPath}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbbmalloc.a"
+def tbbArm64So = "${appProjectPath}/src/main/jniLibs/arm64-v8a/libtbb.so"
+def tbbArm64MallocSo = "${appProjectPath}/src/main/jniLibs/arm64-v8a/libtbbmalloc.so"
+def tbbArmv7LibA = "${appProjectPath}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbb.a"
+def tbbArmv7MallocA = "${appProjectPath}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbbmalloc.a"
+def tbbArmv7So = "${appProjectPath}/src/main/jniLibs/armeabi-v7a/libtbb.so"
+def tbbArmv7MallocSo = "${appProjectPath}/src/main/jniLibs/armeabi-v7a/libtbbmalloc.so"
+def tbbHeaderOut = "${appProjectPath}/src/main/jniImports/oneTBB/include/tbb/tbb.h"
+def occtArm64So = "${appProjectPath}/src/main/occt/jniLibs/arm64-v8a/libTKDESTEP.so"
+def occtArmv7So = "${appProjectPath}/src/main/occt/jniLibs/armeabi-v7a/libTKDESTEP.so"
+def occtHeaderArm64Out = "${appProjectPath}/src/main/occt/include/arm64-v8a/STEPCAFControl_Reader.hxx"
+def occtHeaderArmv7Out = "${appProjectPath}/src/main/occt/include/armeabi-v7a/STEPCAFControl_Reader.hxx"
 
 tasks.register("ensureThirdParty") {
     doLast {
-        def thirdPartyDir = file("${rootDir}/third_party")
+        def rootPath = rootPathForTasks
+        def thirdPartyDir = new File(rootPath, "third_party")
         if (!thirdPartyDir.exists()) {
             thirdPartyDir.mkdirs()
         }
         def repos = [
-                [path: "${rootDir}/third_party/Boost-for-Android", url: "https://github.com/moritz-wundke/Boost-for-Android.git"],
-                [path: "${rootDir}/third_party/openvdb-android", url: "https://github.com/syoyo/openvdb-android.git"],
-                [path: "${rootDir}/third_party/occt", url: "https://github.com/Open-Cascade-SAS/OCCT.git"]
+                [path: "${rootPath}/third_party/Boost-for-Android", url: "https://github.com/moritz-wundke/Boost-for-Android.git"],
+                [path: "${rootPath}/third_party/openvdb-android", url: "https://github.com/syoyo/openvdb-android.git"],
+                [path: "${rootPath}/third_party/occt", url: "https://github.com/Open-Cascade-SAS/OCCT.git"]
         ]
-        repos.each { repo ->
-            if (!file(repo.path).exists()) {
-                exec {
-                    workingDir rootDir
-                    commandLine "git", "clone", "--depth", "1", repo.url, repo.path
-                }
+        def runCommand = { List<String> cmd, File workDir ->
+            Process process = new ProcessBuilder(cmd)
+                    .directory(workDir)
+                    .inheritIO()
+                    .start()
+            int exitCode = process.waitFor()
+            if (exitCode != 0) {
+                throw new GradleException("Command failed (${exitCode}): ${cmd.join(' ')}")
             }
         }
-        def vdbRoot = file("${rootDir}/third_party/openvdb-android")
-        if (file("${vdbRoot}/.gitmodules").exists() && !file("${vdbRoot}/tbb-aarch64/CMakeLists.txt").exists()) {
-            exec {
-                workingDir vdbRoot
-                commandLine "git", "submodule", "update", "--init", "--recursive"
+        for (def repo : repos) {
+            if (!new File(repo.path).exists()) {
+                runCommand(["git", "clone", "--depth", "1", repo.url, repo.path], new File(rootPath))
             }
+        }
+        def vdbRoot = new File(rootPath, "third_party/openvdb-android")
+        if (new File(vdbRoot, ".gitmodules").exists() && !new File(vdbRoot, "tbb-aarch64/CMakeLists.txt").exists()) {
+            runCommand(["git", "submodule", "update", "--init", "--recursive"], vdbRoot)
         }
     }
 }
@@ -206,7 +280,8 @@ tasks.register("ensureThirdParty") {
 tasks.register("patchBoostForAndroid") {
     dependsOn("ensureThirdParty")
     doLast {
-        def scriptFile = file("${boostDir}/build-android.sh")
+        def boostRoot = new File(rootPathForTasks, "third_party/Boost-for-Android")
+        def scriptFile = new File(boostRoot, "build-android.sh")
         if (scriptFile.exists()) {
             def scriptText = scriptFile.getText("UTF-8")
             def changed = false
@@ -246,7 +321,7 @@ tasks.register("patchBoostForAndroid") {
             }
         }
 
-        def commonFile = file("${boostDir}/configs/user-config-ndk23-1_85_0-common.jam")
+        def commonFile = new File(boostRoot, "configs/user-config-ndk23-1_85_0-common.jam")
         if (commonFile.exists()) {
             def commonText = commonFile.getText("UTF-8")
             def commonChanged = false
@@ -270,7 +345,7 @@ tasks.register("patchBoostForAndroid") {
             }
         }
 
-        def arm64File = file("${boostDir}/configs/user-config-ndk23-1_85_0-arm64-v8a.jam")
+        def arm64File = new File(boostRoot, "configs/user-config-ndk23-1_85_0-arm64-v8a.jam")
         if (arm64File.exists()) {
             def text = arm64File.getText("UTF-8")
             if (!text.contains("<arch>")) {
@@ -279,7 +354,7 @@ tasks.register("patchBoostForAndroid") {
             }
         }
 
-        def armv7File = file("${boostDir}/configs/user-config-ndk23-1_85_0-armeabi-v7a.jam")
+        def armv7File = new File(boostRoot, "configs/user-config-ndk23-1_85_0-armeabi-v7a.jam")
         if (armv7File.exists()) {
             def text = armv7File.getText("UTF-8")
             if (!text.contains("<arch>")) {
@@ -294,10 +369,10 @@ tasks.register("buildTbbArm64") {
     dependsOn("ensureThirdParty")
     onlyIf {
         forceNativeRebuild ||
-        !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbb.a").exists() ||
-                !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbbmalloc.a").exists() ||
-                !file("${projectDir}/src/main/jniLibs/arm64-v8a/libtbb.so").exists() ||
-                !file("${projectDir}/src/main/jniLibs/arm64-v8a/libtbbmalloc.so").exists()
+        !new File(tbbArm64LibA).exists() ||
+                !new File(tbbArm64MallocA).exists() ||
+                !new File(tbbArm64So).exists() ||
+                !new File(tbbArm64MallocSo).exists()
     }
     doLast {
         exec {
@@ -325,10 +400,10 @@ tasks.register("buildTbbArmv7") {
     dependsOn("ensureThirdParty")
     onlyIf {
         forceNativeRebuild ||
-        !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbb.a").exists() ||
-                !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbbmalloc.a").exists() ||
-                !file("${projectDir}/src/main/jniLibs/armeabi-v7a/libtbb.so").exists() ||
-                !file("${projectDir}/src/main/jniLibs/armeabi-v7a/libtbbmalloc.so").exists()
+        !new File(tbbArmv7LibA).exists() ||
+                !new File(tbbArmv7MallocA).exists() ||
+                !new File(tbbArmv7So).exists() ||
+                !new File(tbbArmv7MallocSo).exists()
     }
     doLast {
         exec {
@@ -356,10 +431,10 @@ tasks.register("copyTbbArm64", Copy) {
     dependsOn("buildTbbArm64")
     onlyIf {
         forceNativeRebuild ||
-        !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbb.a").exists() ||
-                !file("${projectDir}/src/main/jniImports/oneTBB/lib/arm64-v8a/libtbbmalloc.a").exists() ||
-                !file("${projectDir}/src/main/jniLibs/arm64-v8a/libtbb.so").exists() ||
-                !file("${projectDir}/src/main/jniLibs/arm64-v8a/libtbbmalloc.so").exists()
+        !new File(tbbArm64LibA).exists() ||
+                !new File(tbbArm64MallocA).exists() ||
+                !new File(tbbArm64So).exists() ||
+                !new File(tbbArm64MallocSo).exists()
     }
     from("${tbbInstallArm64}/lib") {
         include "libtbb_static.a"
@@ -395,10 +470,10 @@ tasks.register("copyTbbArmv7", Copy) {
     dependsOn("buildTbbArmv7")
     onlyIf {
         forceNativeRebuild ||
-        !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbb.a").exists() ||
-                !file("${projectDir}/src/main/jniImports/oneTBB/lib/armeabi-v7a/libtbbmalloc.a").exists() ||
-                !file("${projectDir}/src/main/jniLibs/armeabi-v7a/libtbb.so").exists() ||
-                !file("${projectDir}/src/main/jniLibs/armeabi-v7a/libtbbmalloc.so").exists()
+        !new File(tbbArmv7LibA).exists() ||
+                !new File(tbbArmv7MallocA).exists() ||
+                !new File(tbbArmv7So).exists() ||
+                !new File(tbbArmv7MallocSo).exists()
     }
     from("${tbbInstallArmv7}/lib") {
         include "libtbb_static.a"
@@ -432,7 +507,7 @@ tasks.register("copyTbbArmv7", Copy) {
 
 tasks.register("copyTbbHeaders") {
     dependsOn("buildTbbArm64")
-    onlyIf { !file("${projectDir}/src/main/jniImports/oneTBB/include/tbb/tbb.h").exists() }
+    onlyIf { !new File(tbbHeaderOut).exists() }
     doLast {
         copy {
             from "${tbbInstallArm64}/include/tbb"
@@ -447,21 +522,25 @@ tasks.register("copyTbbHeaders") {
 
 tasks.register("buildBoostArm64") {
     dependsOn("patchBoostForAndroid")
-    onlyIf { !file("${projectDir}/src/main/jniImports/boost/lib/arm64-v8a/lib/libboost_atomic-clang-mt-a64-1_85.a").exists() }
+    onlyIf { !new File(boostArm64OutLib).exists() }
     doLast {
         if (isWindows) {
-            if (!file(wslExe).exists()) {
+            if (!new File(wslExe).exists()) {
                 throw new GradleException("WSL is required to build Boost on Windows. Install WSL or provide prebuilt Boost libs.")
             }
             def ndkWsl = toWslPath(ndkDir)
             def boostWsl = toWslPath(boostDir)
             def binWsl = toWslPath(llvmBinDir)
-            exec {
-                commandLine wslExe, "bash", "-lc", "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/aarch64-linux-android21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=arm64-v8a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            def cmd = "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/aarch64-linux-android21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=arm64-v8a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            Process p = new ProcessBuilder([wslExe, "bash", "-lc", cmd]).inheritIO().start()
+            if (p.waitFor() != 0) {
+                throw new GradleException("Boost arm64 build failed")
             }
         } else {
-            exec {
-                commandLine "bash", "-lc", "set -euo pipefail; cd ${boostDir}; chmod +x ${llvmBinDir}/aarch64-linux-android21-clang++ ${llvmBinDir}/llvm-ar ${llvmBinDir}/llvm-ranlib || true; ./build-android.sh ${ndkDir} --boost=1.85.0 --arch=arm64-v8a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            def cmd = "set -euo pipefail; cd ${boostDir}; chmod +x ${llvmBinDir}/aarch64-linux-android21-clang++ ${llvmBinDir}/llvm-ar ${llvmBinDir}/llvm-ranlib || true; ./build-android.sh ${ndkDir} --boost=1.85.0 --arch=arm64-v8a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            Process p = new ProcessBuilder(["bash", "-lc", cmd]).inheritIO().start()
+            if (p.waitFor() != 0) {
+                throw new GradleException("Boost arm64 build failed")
             }
         }
     }
@@ -469,21 +548,25 @@ tasks.register("buildBoostArm64") {
 
 tasks.register("buildBoostArmv7") {
     dependsOn("patchBoostForAndroid")
-    onlyIf { !file("${projectDir}/src/main/jniImports/boost/lib/armeabi-v7a/lib/libboost_atomic-clang-mt-a32-1_85.a").exists() }
+    onlyIf { !new File(boostArmv7OutLib).exists() }
     doLast {
         if (isWindows) {
-            if (!file(wslExe).exists()) {
+            if (!new File(wslExe).exists()) {
                 throw new GradleException("WSL is required to build Boost on Windows. Install WSL or provide prebuilt Boost libs.")
             }
             def ndkWsl = toWslPath(ndkDir)
             def boostWsl = toWslPath(boostDir)
             def binWsl = toWslPath(llvmBinDir)
-            exec {
-                commandLine wslExe, "bash", "-lc", "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/armv7a-linux-androideabi21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=armeabi-v7a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            def cmd = "set -euo pipefail; cd ${boostWsl}; chmod +x ${binWsl}/armv7a-linux-androideabi21-clang++ ${binWsl}/llvm-ar.exe ${binWsl}/llvm-ranlib.exe || true; FORCE_PLATFORM_OS=windows AndroidCompilerSuffix= AndroidToolSuffix=.exe ./build-android.sh ${ndkWsl} --boost=1.85.0 --arch=armeabi-v7a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            Process p = new ProcessBuilder([wslExe, "bash", "-lc", cmd]).inheritIO().start()
+            if (p.waitFor() != 0) {
+                throw new GradleException("Boost armv7 build failed")
             }
         } else {
-            exec {
-                commandLine "bash", "-lc", "set -euo pipefail; cd ${boostDir}; chmod +x ${llvmBinDir}/armv7a-linux-androideabi21-clang++ ${llvmBinDir}/llvm-ar ${llvmBinDir}/llvm-ranlib || true; ./build-android.sh ${ndkDir} --boost=1.85.0 --arch=armeabi-v7a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            def cmd = "set -euo pipefail; cd ${boostDir}; chmod +x ${llvmBinDir}/armv7a-linux-androideabi21-clang++ ${llvmBinDir}/llvm-ar ${llvmBinDir}/llvm-ranlib || true; ./build-android.sh ${ndkDir} --boost=1.85.0 --arch=armeabi-v7a --target-version=21 --without-libraries=context,coroutine,fiber,python"
+            Process p = new ProcessBuilder(["bash", "-lc", cmd]).inheritIO().start()
+            if (p.waitFor() != 0) {
+                throw new GradleException("Boost armv7 build failed")
             }
         }
     }
@@ -491,7 +574,7 @@ tasks.register("buildBoostArmv7") {
 
 tasks.register("copyBoostArm64", Copy) {
     dependsOn("buildBoostArm64")
-    onlyIf { !file("${projectDir}/src/main/jniImports/boost/lib/arm64-v8a/lib/libboost_atomic-clang-mt-a64-1_85.a").exists() }
+    onlyIf { !new File(boostArm64OutLib).exists() }
     from("${boostOutArm64}/lib") {
         include "libboost_*.a"
     }
@@ -500,7 +583,7 @@ tasks.register("copyBoostArm64", Copy) {
 
 tasks.register("copyBoostArmv7", Copy) {
     dependsOn("buildBoostArmv7")
-    onlyIf { !file("${projectDir}/src/main/jniImports/boost/lib/armeabi-v7a/lib/libboost_atomic-clang-mt-a32-1_85.a").exists() }
+    onlyIf { !new File(boostArmv7OutLib).exists() }
     from("${boostOutArmv7}/lib") {
         include "libboost_*.a"
     }
@@ -509,74 +592,76 @@ tasks.register("copyBoostArmv7", Copy) {
 
 tasks.register("copyBoostHeaders", Copy) {
     dependsOn("ensureThirdParty")
-    onlyIf { !file("${projectDir}/src/main/jniImports/boost/include/boost/variant.hpp").exists() }
+    onlyIf { !new File(boostHeadersOut).exists() }
     from("${boostDir}/boost_1_85_0/boost")
     into("${projectDir}/src/main/jniImports/boost/include/boost")
 }
 
 tasks.register("buildOcctArm64") {
     dependsOn("ensureThirdParty")
-    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/arm64-v8a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !new File(occtArm64So).exists() }
     doLast {
-        exec {
-            commandLine cmakeExe, "-G", "Ninja",
-                    "-S", occtSrc,
-                    "-B", occtBuildArm64,
-                    "-DCMAKE_MAKE_PROGRAM=${ninjaExe}",
-                    "-DCMAKE_TOOLCHAIN_FILE=${toolchainFile}",
-                    "-DANDROID_ABI=arm64-v8a",
-                    "-DANDROID_PLATFORM=android-21",
-                    "-DCMAKE_BUILD_TYPE=Release",
-                    "-DBUILD_LIBRARY_TYPE=Shared",
-                    "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
-                    "-DINSTALL_DIR_LIB=libs/arm64-v8a",
-                    "-DINSTALL_DIR_INCLUDE=inc",
-                    "-DBUILD_DOC_Overview=OFF",
-                    "-DBUILD_DOC_RefMan=OFF",
-                    "-DUSE_FREETYPE=OFF",
-                    "-DUSE_RAPIDJSON=OFF",
-                    "-DUSE_DRACO=OFF",
-                    "-DCMAKE_INSTALL_PREFIX=${occtDistArm64}"
-        }
-        exec {
-            commandLine cmakeExe, "--build", occtBuildArm64, "--target", "install", "--config", "Release", "--", "-j2"
-        }
+        List<String> cfgCmd = [
+                cmakeExe, "-G", "Ninja",
+                "-S", occtSrc,
+                "-B", occtBuildArm64,
+                "-DCMAKE_MAKE_PROGRAM=${ninjaExe}",
+                "-DCMAKE_TOOLCHAIN_FILE=${toolchainFile}",
+                "-DANDROID_ABI=arm64-v8a",
+                "-DANDROID_PLATFORM=android-21",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DBUILD_LIBRARY_TYPE=Shared",
+                "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
+                "-DINSTALL_DIR_LIB=libs/arm64-v8a",
+                "-DINSTALL_DIR_INCLUDE=inc",
+                "-DBUILD_DOC_Overview=OFF",
+                "-DBUILD_DOC_RefMan=OFF",
+                "-DUSE_FREETYPE=OFF",
+                "-DUSE_RAPIDJSON=OFF",
+                "-DUSE_DRACO=OFF",
+                "-DCMAKE_INSTALL_PREFIX=${occtDistArm64}"
+        ]
+        Process p1 = new ProcessBuilder(cfgCmd).inheritIO().start()
+        if (p1.waitFor() != 0) throw new GradleException("OCCT arm64 configure failed")
+        Process p2 = new ProcessBuilder([cmakeExe, "--build", occtBuildArm64, "--target", "install", "--config", "Release", "--", "-j2"]).inheritIO().start()
+        if (p2.waitFor() != 0) throw new GradleException("OCCT arm64 build failed")
     }
 }
 
 tasks.register("buildOcctArmv7") {
     dependsOn("ensureThirdParty")
-    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/armeabi-v7a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !new File(occtArmv7So).exists() }
     doLast {
-        exec {
-            commandLine cmakeExe, "-G", "Ninja",
-                    "-S", occtSrc,
-                    "-B", occtBuildArmv7,
-                    "-DCMAKE_MAKE_PROGRAM=${ninjaExe}",
-                    "-DCMAKE_TOOLCHAIN_FILE=${toolchainFile}",
-                    "-DANDROID_ABI=armeabi-v7a",
-                    "-DANDROID_PLATFORM=android-21",
-                    "-DCMAKE_BUILD_TYPE=Release",
-                    "-DBUILD_LIBRARY_TYPE=Shared",
-                    "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
-                    "-DINSTALL_DIR_LIB=libs/armeabi-v7a",
-                    "-DINSTALL_DIR_INCLUDE=inc",
-                    "-DBUILD_DOC_Overview=OFF",
-                    "-DBUILD_DOC_RefMan=OFF",
-                    "-DUSE_FREETYPE=OFF",
-                    "-DUSE_RAPIDJSON=OFF",
-                    "-DUSE_DRACO=OFF",
-                    "-DCMAKE_INSTALL_PREFIX=${occtDistArmv7}"
-        }
-        exec {
-            commandLine cmakeExe, "--build", occtBuildArmv7, "--target", "install", "--config", "Release", "--", "-j2"
-        }
+        List<String> cfgCmd = [
+                cmakeExe, "-G", "Ninja",
+                "-S", occtSrc,
+                "-B", occtBuildArmv7,
+                "-DCMAKE_MAKE_PROGRAM=${ninjaExe}",
+                "-DCMAKE_TOOLCHAIN_FILE=${toolchainFile}",
+                "-DANDROID_ABI=armeabi-v7a",
+                "-DANDROID_PLATFORM=android-21",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DBUILD_LIBRARY_TYPE=Shared",
+                "-DCMAKE_SHARED_LINKER_FLAGS=${pageSizeLinkerFlags}",
+                "-DINSTALL_DIR_LIB=libs/armeabi-v7a",
+                "-DINSTALL_DIR_INCLUDE=inc",
+                "-DBUILD_DOC_Overview=OFF",
+                "-DBUILD_DOC_RefMan=OFF",
+                "-DUSE_FREETYPE=OFF",
+                "-DUSE_RAPIDJSON=OFF",
+                "-DUSE_DRACO=OFF",
+                "-DCMAKE_INSTALL_PREFIX=${occtDistArmv7}"
+        ]
+        Process p1 = new ProcessBuilder(cfgCmd).inheritIO().start()
+        if (p1.waitFor() != 0) throw new GradleException("OCCT armv7 configure failed")
+        Process p2 = new ProcessBuilder([cmakeExe, "--build", occtBuildArmv7, "--target", "install", "--config", "Release", "--", "-j2"]).inheritIO().start()
+        if (p2.waitFor() != 0) throw new GradleException("OCCT armv7 build failed")
     }
 }
 
 tasks.register("copyOcctArm64", Copy) {
     dependsOn("buildOcctArm64")
-    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/arm64-v8a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !new File(occtArm64So).exists() }
     from("${occtDistArm64}/libs/arm64-v8a") {
         include "*.so"
     }
@@ -585,7 +670,7 @@ tasks.register("copyOcctArm64", Copy) {
 
 tasks.register("copyOcctArmv7", Copy) {
     dependsOn("buildOcctArmv7")
-    onlyIf { forceNativeRebuild || !file("${projectDir}/src/main/occt/jniLibs/armeabi-v7a/libTKDESTEP.so").exists() }
+    onlyIf { forceNativeRebuild || !new File(occtArmv7So).exists() }
     from("${occtDistArmv7}/libs/armeabi-v7a") {
         include "*.so"
     }
@@ -594,14 +679,14 @@ tasks.register("copyOcctArmv7", Copy) {
 
 tasks.register("copyOcctHeadersArm64", Copy) {
     dependsOn("buildOcctArm64")
-    onlyIf { !file("${projectDir}/src/main/occt/include/arm64-v8a/STEPCAFControl_Reader.hxx").exists() }
+    onlyIf { !new File(occtHeaderArm64Out).exists() }
     from("${occtDistArm64}/inc")
     into("${projectDir}/src/main/occt/include/arm64-v8a")
 }
 
 tasks.register("copyOcctHeadersArmv7", Copy) {
     dependsOn("buildOcctArmv7")
-    onlyIf { !file("${projectDir}/src/main/occt/include/armeabi-v7a/STEPCAFControl_Reader.hxx").exists() }
+    onlyIf { !new File(occtHeaderArmv7Out).exists() }
     from("${occtDistArmv7}/inc")
     into("${projectDir}/src/main/occt/include/armeabi-v7a")
 }
