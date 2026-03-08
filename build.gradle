@@ -91,49 +91,141 @@ def findWindowsNpm() {
     return candidates.isEmpty() ? null : candidates.first().absolutePath
 }
 
-tasks.register("startBackend", Exec) {
-    workingDir "${rootDir}/backend"
-    if (isWindows) {
-        doFirst {
-            def npmPath = (project.findProperty("npmPath") ?: System.getenv("NPM_PATH"))?.toString()
-            if (!npmPath) {
-                npmPath = findWindowsNpm()
-            }
-            if (!npmPath) {
-                def out = new ByteArrayOutputStream()
-                exec {
-                    commandLine "cmd", "/c", "where.exe", "npm"
-                    standardOutput = out
-                    errorOutput = out
-                    ignoreExitValue = true
-                }
-                def line = out.toString().readLines().find { it.toLowerCase().endsWith("npm.cmd") || it.toLowerCase().endsWith("npm.exe") }
-                if (line) {
-                    npmPath = line.trim()
-                }
-            }
-            if (!npmPath) {
-                throw new GradleException("npm not found. Set -PnpmPath=... or ensure npm is visible to cmd.exe. If using nvm, try your NVM_HOME version's npm.cmd.")
-            }
-            def nodeModules = new File(workingDir, "node_modules")
-            if (!nodeModules.exists()) {
-                exec {
-                    workingDir "${rootDir}/backend"
-                    commandLine "cmd", "/c", npmPath, "install"
-                }
-            }
-            commandLine "cmd", "/c", "start", "\"\"", npmPath, "start"
+def findWindowsNode() {
+    def candidates = []
+    def pathEnv = System.getenv("PATH") ?: ""
+    pathEnv.split(";").each { p ->
+        if (!p) return
+        def exe = new File(p, "node.exe")
+        if (exe.exists()) candidates << exe
+    }
+    def nvmHome = System.getenv("NVM_HOME")
+    def nvmSymlink = System.getenv("NVM_SYMLINK")
+    if (nvmSymlink) {
+        def exe = new File(nvmSymlink, "node.exe")
+        if (exe.exists()) candidates << exe
+    }
+    if (nvmHome) {
+        def current = new File(nvmHome, "current")
+        if (current.exists()) {
+            def exe = new File(current, "node.exe")
+            if (exe.exists()) candidates << exe
         }
+        def versions = new File(nvmHome)
+        if (versions.exists()) {
+            versions.listFiles()?.findAll { it.isDirectory() }?.each { v ->
+                def exe = new File(v, "node.exe")
+                if (exe.exists()) candidates << exe
+            }
+        }
+    }
+    def programFiles = System.getenv("ProgramFiles")
+    if (programFiles) {
+        def exe = new File(programFiles, "nodejs\\node.exe")
+        if (exe.exists()) candidates << exe
+    }
+    def localAppData = System.getenv("LOCALAPPDATA")
+    if (localAppData) {
+        def nvmLocal = new File(localAppData, "nvm")
+        if (nvmLocal.exists()) {
+            nvmLocal.listFiles()?.findAll { it.isDirectory() }?.each { v ->
+                def exe = new File(v, "node.exe")
+                if (exe.exists()) candidates << exe
+            }
+        }
+    }
+    return candidates.isEmpty() ? null : candidates.first().absolutePath
+}
+
+def backendDir = file("${rootDir}/backend")
+def backendNodeModulesDir = new File(backendDir, "node_modules")
+def npmPathProp = providers.gradleProperty("npmPath")
+    .orElse(providers.environmentVariable("NPM_PATH"))
+
+def resolvedWindowsNpm = null
+def resolvedWindowsNode = null
+if (isWindows) {
+    resolvedWindowsNpm = npmPathProp.orNull?.toString() ?: findWindowsNpm()
+    if (!resolvedWindowsNpm) {
+        throw new GradleException("npm not found. Set -PnpmPath=... or ensure npm is visible to cmd.exe. If using nvm, try your NVM_HOME version's npm.cmd.")
+    }
+    resolvedWindowsNode = findWindowsNode()
+    if (!resolvedWindowsNode) {
+        throw new GradleException("node.exe not found. Ensure Node.js is installed and visible to cmd.exe.")
+    }
+}
+
+tasks.register("installBackendDeps", Exec) {
+    workingDir backendDir
+    onlyIf { !backendNodeModulesDir.exists() }
+    if (isWindows) {
+        commandLine "cmd", "/c", resolvedWindowsNpm, "install"
     } else {
-        doFirst {
-            def nodeModules = new File(workingDir, "node_modules")
-            if (!nodeModules.exists()) {
-                exec {
-                    workingDir "${rootDir}/backend"
-                    commandLine "sh", "-c", "${npmCmd} install"
+        commandLine "sh", "-c", "${npmCmd} install"
+    }
+}
+
+tasks.register("startBackend") {
+    dependsOn("installBackendDeps")
+    doLast {
+        def command = isWindows
+            ? [resolvedWindowsNode, "--no-deprecation", "server.js"]
+            : ["sh", "-c", "${npmCmd} start"]
+
+        def process = new ProcessBuilder(command)
+            .directory(backendDir)
+            .start()
+
+        def stopProcess = {
+            if (!process.isAlive()) {
+                return
+            }
+            if (isWindows) {
+                new ProcessBuilder("cmd", "/c", "taskkill", "/PID", process.pid().toString(), "/T", "/F")
+                    .start()
+                    .waitFor()
+            } else {
+                process.destroy()
+                process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+                if (process.isAlive()) {
+                    process.destroyForcibly()
                 }
             }
-            commandLine "sh", "-c", "${npmCmd} start &"
+        }
+
+        def pumpStream = { input, output ->
+            Thread.start {
+                input.withReader("UTF-8") { reader ->
+                    String line
+                    while ((line = reader.readLine()) != null) {
+                        output.println(line)
+                    }
+                }
+            }
+        }
+
+        def outThread = pumpStream(process.inputStream, System.out)
+        def errThread = pumpStream(process.errorStream, System.err)
+
+        def shutdownHook = new Thread({
+            stopProcess()
+        }, "stop-backend-on-gradle-exit")
+
+        Runtime.getRuntime().addShutdownHook(shutdownHook)
+        try {
+            def exitCode = process.waitFor()
+            outThread.join(1000)
+            errThread.join(1000)
+            if (exitCode != 0) {
+                throw new GradleException("Backend process exited with code ${exitCode}")
+            }
+        } finally {
+            stopProcess()
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook)
+            } catch (IllegalStateException ignored) {
+                // Ignore; JVM is already shutting down and hook execution has begun.
+            }
         }
     }
 }
